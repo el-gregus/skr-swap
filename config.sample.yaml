@@ -1,0 +1,55 @@
+# SKR Swap Bot Configuration
+
+# Token mint addresses (Solana mainnet)
+tokens:
+  SOL: So11111111111111111111111111111111111111112  # Native SOL (wrapped)
+  SKR: 2Ry8bbr959DhjUC2pW2TmqE97QQN5gwN1epb3kjfMy7g  # Solana Mobile Seeker
+  USDC: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v  # USDC
+
+# Wallet accounts
+accounts:
+  - id: wallet-1
+    label: "Primary Wallet"
+    enabled: true
+    private_key: "${WALLET_PRIVATE_KEY}"  # From env var
+    strategy:
+      token_pair: "SOL-SKR"
+      base_token: "SOL"
+      quote_token: "SKR"
+      default_swap_size: 0.1  # 0.1 SOL
+      max_slippage_bps: 100  # 1%
+      min_time_between_swaps: 30  # seconds
+
+# Jupiter configuration
+jupiter:
+  api_url: "${JUPITER_API_URL}"
+  default_slippage_bps: 50  # 0.5%
+  compute_unit_price: 100000  # Micro lamports
+  priority_fee_multiplier: 1.2
+
+# Solana configuration
+solana:
+  rpc_url: "${SOLANA_RPC_URL}"
+  commitment: "confirmed"
+  timeout: 30
+
+# Risk management
+risk:
+  max_swap_size_sol: 10.0  # Maximum 10 SOL per swap
+  min_sol_balance: 0.1  # Reserve 0.1 SOL for fees
+  max_slippage_bps: 500  # 5% hard limit
+
+# Webhook configuration
+webhook:
+  require_secret: false
+  secret_env_key: "WEBHOOK_SECRET"
+
+# Logging
+logging:
+  level: "INFO"
+  dir: "./logs"
+
+# Dashboard
+dashboard:
+  primary_account_id: "wallet-1"
+  password: "${DASHBOARD_PASSWORD}"
