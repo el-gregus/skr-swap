@@ -25,7 +25,6 @@ def _get_account_manager(request: Request):
 
 
 @router.get("/", response_class=HTMLResponse)
-@router.get("", response_class=HTMLResponse)
 async def dashboard_home():
     """Serve dashboard HTML."""
     return """

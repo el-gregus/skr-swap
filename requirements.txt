@@ -3,7 +3,7 @@ uvicorn[standard]==0.27.0
 pydantic==2.5.3
 pydantic-settings==2.1.0
 PyYAML==6.0.1
-httpx==0.26.0
+httpx==0.23.3
 loguru==0.7.2
 python-multipart==0.0.6
 solana==0.32.0
