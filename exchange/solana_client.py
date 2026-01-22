@@ -58,23 +58,24 @@ class SolanaClient:
             Balance in base units or None if failed
         """
         try:
+            from solana.rpc.types import TokenAccountOpts
+
             # Get token accounts by owner
+            opts = TokenAccountOpts(mint=mint)
             response = await self.client.get_token_accounts_by_owner(
                 owner,
-                {"mint": mint}
+                opts
             )
 
-            if not response.value:
+            if not response.value or len(response.value) == 0:
                 return 0
 
-            # Parse first token account balance
-            account_data = response.value[0].account.data
-            # Token account data is base64 encoded
-            # Balance is at bytes 64-72 (little-endian u64)
-            if isinstance(account_data, str):
-                decoded = base64.b64decode(account_data)
-                balance = int.from_bytes(decoded[64:72], 'little')
-                return balance
+            # Get balance from first token account
+            token_account = response.value[0].pubkey
+            balance_response = await self.client.get_token_account_balance(token_account)
+
+            if balance_response.value:
+                return int(balance_response.value.amount)
 
             return 0
 
