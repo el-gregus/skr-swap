@@ -63,6 +63,15 @@ class SwapEngine:
             )
             return
 
+        # Check position before executing (arbitrage strategy)
+        if not await self._check_position(signal.action):
+            logger.info(
+                "[{}] Skipping {} - position check failed",
+                self.account_id,
+                signal.action
+            )
+            return
+
         # Determine swap direction
         input_token, output_token = self._get_swap_tokens(signal)
         if not input_token or not output_token:
@@ -127,6 +136,79 @@ class SwapEngine:
                 self.account_id,
                 result.error
             )
+
+    async def _check_position(self, action: str) -> bool:
+        """
+        Check if we should execute this action based on current holdings.
+
+        Arbitrage strategy:
+        - Only BUY SKR if we don't have any (holding SOL)
+        - Only SELL SKR if we have some (holding SKR)
+
+        Args:
+            action: BUY or SELL
+
+        Returns:
+            True if position check passes, False otherwise
+        """
+        if not self.solana_client or not self.keypair:
+            logger.warning("[{}] Cannot check position: missing client/keypair", self.account_id)
+            return True  # Allow trade if we can't check
+
+        skr_mint = self.token_config.get("SKR")
+        if not skr_mint:
+            logger.warning("[{}] SKR mint not configured", self.account_id)
+            return True  # Allow trade if SKR not configured
+
+        try:
+            # Get current SKR balance
+            balance = await self.solana_client.get_token_balance(
+                Pubkey.from_string(str(self.keypair.pubkey())),
+                Pubkey.from_string(skr_mint)
+            )
+
+            # Convert from lamports to tokens (6 decimals for SKR)
+            skr_balance = (balance / 1e6) if balance else 0
+            min_threshold = self.strategy.get("min_skr_threshold", 0.1)  # Minimum SKR to consider "holding"
+
+            logger.info(
+                "[{}] Current SKR balance: {} (threshold: {})",
+                self.account_id,
+                skr_balance,
+                min_threshold
+            )
+
+            if action == "BUY":
+                # Only buy if we DON'T have SKR (or very little)
+                if skr_balance >= min_threshold:
+                    logger.warning(
+                        "[{}] Skipping BUY - already holding {} SKR (threshold: {})",
+                        self.account_id,
+                        skr_balance,
+                        min_threshold
+                    )
+                    return False
+                logger.info("[{}] BUY approved - SKR balance below threshold", self.account_id)
+                return True
+
+            elif action == "SELL":
+                # Only sell if we HAVE SKR
+                if skr_balance < min_threshold:
+                    logger.warning(
+                        "[{}] Skipping SELL - insufficient SKR balance: {} (threshold: {})",
+                        self.account_id,
+                        skr_balance,
+                        min_threshold
+                    )
+                    return False
+                logger.info("[{}] SELL approved - have {} SKR to sell", self.account_id, skr_balance)
+                return True
+
+            return True
+
+        except Exception as e:
+            logger.error("[{}] Failed to check position: {}", self.account_id, e)
+            return False  # Don't trade if we can't verify position
 
     async def _get_swap_amount(self, action: str, token: str) -> Optional[float]:
         """
