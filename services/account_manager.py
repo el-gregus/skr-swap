@@ -83,6 +83,9 @@ class AccountManager:
                 strategy=account_config.get("strategy", {}),
                 analytics=self.analytics,
                 swap_manager=swap_manager,
+                solana_client=self.solana,
+                keypair=keypair,
+                token_config=token_mints,
             )
 
             # Create account

@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Dict, Any, Optional
 from loguru import logger
+from solders.pubkey import Pubkey
 
 from models.schemas import Signal, SwapRequest
 
@@ -19,14 +20,21 @@ class SwapEngine:
         strategy: Dict[str, Any],
         analytics: "AnalyticsStore",
         swap_manager: Any,  # Will be set by AccountManager
+        solana_client: Any = None,
+        keypair: Any = None,
+        token_config: Dict[str, str] = None,
     ):
         self.account_id = account_id
         self.account_label = account_label
         self.strategy = strategy
         self.analytics = analytics
         self.swap_manager = swap_manager
+        self.solana_client = solana_client
+        self.keypair = keypair
+        self.token_config = token_config or {}
         self.last_swap_time: Dict[str, datetime] = {}
-        self.last_action: Optional[str] = None  # Track last executed action
+        self.last_action: Optional[str] = None
+        self.last_swap_output_amount: Optional[float] = None  # Track SOL from SELL
 
     async def process_signal(self, signal: Signal) -> None:
         """
@@ -61,8 +69,17 @@ class SwapEngine:
             logger.warning("[{}] Could not determine swap tokens", self.account_id)
             return
 
-        # Get swap amount
-        amount = signal.amount or self.strategy.get("default_swap_size", 0.1)
+        # Get swap amount based on action
+        amount = await self._get_swap_amount(signal.action, input_token)
+        if amount is None or amount <= 0:
+            logger.warning(
+                "[{}] Invalid or zero swap amount for {} {}",
+                self.account_id,
+                signal.action,
+                input_token
+            )
+            return
+
         slippage_bps = self.strategy.get("max_slippage_bps", 100)
 
         # Create swap request
@@ -87,20 +104,94 @@ class SwapEngine:
 
         if result.success:
             logger.info(
-                "[{}] Swap successful: {} (sig: {})",
+                "[{}] Swap successful: {} {} (sig: {})",
                 self.account_id,
                 result.output_amount,
+                output_token,
                 result.signature[:16] if result.signature else "?"
             )
             self.last_swap_time[signal.symbol] = datetime.utcnow()
             # Update last action after successful swap
             self.last_action = signal.action
+            # Save output amount if this was a SELL (to use for next BUY)
+            if signal.action == "SELL":
+                self.last_swap_output_amount = result.output_amount
+                logger.info(
+                    "[{}] Saved {} SOL for next BUY",
+                    self.account_id,
+                    result.output_amount
+                )
         else:
             logger.error(
                 "[{}] Swap failed: {}",
                 self.account_id,
                 result.error
             )
+
+    async def _get_swap_amount(self, action: str, token: str) -> Optional[float]:
+        """
+        Get the amount to swap based on action.
+
+        For SELL: Use entire SKR balance
+        For BUY: Use SOL amount from previous SELL, or default
+
+        Args:
+            action: BUY or SELL
+            token: Token symbol to swap
+
+        Returns:
+            Amount to swap or None if error
+        """
+        if action == "SELL":
+            # Use entire SKR balance
+            if not self.solana_client or not self.keypair:
+                logger.warning("[{}] Cannot get balance: missing client/keypair", self.account_id)
+                return self.strategy.get("default_swap_size", 0.1)
+
+            skr_mint = self.token_config.get("SKR")
+            if not skr_mint:
+                logger.warning("[{}] SKR mint not configured", self.account_id)
+                return self.strategy.get("default_swap_size", 0.1)
+
+            try:
+                balance = await self.solana_client.get_token_balance(
+                    Pubkey.from_string(str(self.keypair.pubkey())),
+                    Pubkey.from_string(skr_mint)
+                )
+                
+                if balance is None or balance == 0:
+                    logger.warning("[{}] No SKR balance to sell", self.account_id)
+                    return None
+
+                # Convert from lamports to tokens (6 decimals for SKR)
+                amount = balance / 1e6
+                logger.info("[{}] Using entire SKR balance: {}", self.account_id, amount)
+                return amount
+
+            except Exception as e:
+                logger.error("[{}] Failed to get SKR balance: {}", self.account_id, e)
+                return self.strategy.get("default_swap_size", 0.1)
+
+        elif action == "BUY":
+            # Use SOL amount from previous SELL
+            if self.last_swap_output_amount is not None:
+                logger.info(
+                    "[{}] Using saved SOL amount from last SELL: {}",
+                    self.account_id,
+                    self.last_swap_output_amount
+                )
+                return self.last_swap_output_amount
+            else:
+                # First BUY or no previous SELL
+                default_amount = self.strategy.get("default_swap_size", 0.1)
+                logger.info(
+                    "[{}] No previous SELL amount, using default: {}",
+                    self.account_id,
+                    default_amount
+                )
+                return default_amount
+
+        return None
 
     def _validate_signal(self, signal: Signal) -> bool:
         """Validate signal meets requirements."""

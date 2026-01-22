@@ -72,10 +72,6 @@ async def dashboard_home():
     <body>
         <div class="container">
             <h1>🔄 SKR Swap Dashboard</h1>
-n            <div class="section">
-                <h2>💰 Wallet Balances</h2>
-                <div id="balances">Loading...</div>
-            </div>
 
             <div class="section">
                 <h2>Recent Swaps</h2>
@@ -122,39 +118,6 @@ n            <div class="section">
                 document.getElementById('swaps').innerHTML = html;
             }
 
-            async function loadBalances() {
-                const response = await fetch("/api/balances/wallet-1");
-                const data = await response.json();
-
-                let totalUsd = data.total_usd || 0;
-                const html = `
-                    <div style="margin-bottom: 15px;">
-                        <strong>Total Value:</strong> $${totalUsd.toFixed(2)} USD
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Token</th>
-                                <th>Balance</th>
-                                <th>Price (USD)</th>
-                                <th>Value (USD)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${(data.balances || []).map(b => `
-                                <tr>
-                                    <td><strong>${b.token}</strong></td>
-                                    <td>${b.balance.toFixed(6)}</td>
-                                    <td>$${(b.price_usd || 0).toFixed(2)}</td>
-                                    <td>$${(b.value_usd || 0).toFixed(2)}</td>
-                                </tr>
-                            `).join("")}
-                        </tbody>
-                    </table>
-                `;
-                document.getElementById("balances").innerHTML = html;
-            }
-
             async function loadSignals() {
                 const response = await fetch('/api/signals?limit=10');
                 const data = await response.json();
@@ -189,13 +152,11 @@ n            <div class="section">
             // Load data
             loadSwaps();
             loadSignals();
-            loadBalances();
 
             // Refresh every 5 seconds
             setInterval(() => {
                 loadSwaps();
                 loadSignals();
-                loadBalances();
             }, 5000);
         </script>
     </body>
@@ -244,84 +205,18 @@ async def get_balances(
     request: Request,
     account_id: str,
 ) -> Dict[str, Any]:
-    """Get token balances for an account with USD values."""
+    """Get token balances for an account."""
+    analytics = _get_analytics(request)
     manager = _get_account_manager(request)
-    
+
     account = manager.get_account(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    
-    # Get token configuration
-    config = getattr(request.app.state, "config", {})
-    tokens = config.get("tokens", {})
-    
-    # Get Jupiter and Solana clients
-    jupiter = getattr(request.app.state, "jupiter", None)
-    solana = getattr(request.app.state, "solana", None)
-    
-    if not jupiter or not solana:
-        raise HTTPException(status_code=500, detail="Clients not initialized")
-    
-    balances = []
-    
-    # Get SOL balance
-    from solders.pubkey import Pubkey
-    wallet_pubkey = account.keypair.pubkey()
-    
-    try:
-        sol_balance_resp = await solana.get_balance(wallet_pubkey)
-        sol_balance = sol_balance_resp / 1e9 if sol_balance_resp else 0
-        
-        balances.append({
-            "token": "SOL",
-            "balance": sol_balance,
-            "mint": tokens.get("SOL", "So11111111111111111111111111111111111111112"),
-        })
-    except Exception as e:
-        logger.error("Failed to get SOL balance: {}", e)
-    
-    # Get SKR balance
-    if "SKR" in tokens:
-        try:
-            skr_balance_raw = await solana.get_token_balance(
-                Pubkey.from_string(str(wallet_pubkey)),
-                Pubkey.from_string(tokens["SKR"])
-            )
-            skr_balance = (skr_balance_raw / 1e6) if skr_balance_raw else 0
-            
-            balances.append({
-                "token": "SKR",
-                "balance": skr_balance,
-                "mint": tokens["SKR"],
-            })
-        except Exception as e:
-            logger.error("Failed to get SKR balance: {}", e)
-    
-    # Get USD prices from Jupiter
-    token_mints = [b["mint"] for b in balances]
-    prices = {}
-    
-    try:
-        price_data = await jupiter.get_token_price(token_mints)
-        if price_data:
-            prices = price_data
-    except Exception as e:
-        logger.error("Failed to get token prices: {}", e)
-    
-    # Add USD values
-    total_usd = 0
-    for balance in balances:
-        mint = balance["mint"]
-        price = prices.get(mint, 0)
-        usd_value = balance["balance"] * price
-        balance["price_usd"] = price
-        balance["value_usd"] = usd_value
-        total_usd += usd_value
-    
+
+    balances = analytics.get_wallet_balances(account_id)
+
     return {
         "account_id": account_id,
         "account_label": account.label,
-        "wallet_address": str(wallet_pubkey),
         "balances": balances,
-        "total_usd": total_usd,
     }
