@@ -72,7 +72,7 @@ async def dashboard_home():
     <body>
         <div class="container">
             <h1>🔄 SKR Swap Dashboard</h1>
-n            <div class="section">
+            <div class="section">
                 <h2>💰 Wallet Balances</h2>
                 <div id="balances">Loading...</div>
             </div>
