@@ -80,7 +80,11 @@ class SolanaClient:
             return 0
 
         except Exception as e:
-            logger.error("Failed to get token balance: {}", str(e))
+            import traceback
+            logger.error("Failed to get token balance: {} | Type: {} | Traceback: {}",
+                        str(e) if str(e) else repr(e),
+                        type(e).__name__,
+                        traceback.format_exc())
             return None
 
     async def send_transaction(
@@ -103,12 +107,12 @@ class SolanaClient:
             tx_bytes = base64.b64decode(transaction_base64)
             transaction = VersionedTransaction.from_bytes(tx_bytes)
 
-            # Sign transaction
-            signature = keypair.sign_message(message.to_bytes_versioned(transaction.message))
-            signed_transaction = VersionedTransaction.populate(transaction.message, [signature])
+            # Sign transaction by passing keypair to constructor
+            message = transaction.message
+            signed_tx = VersionedTransaction(message, [keypair])
 
             # Send transaction
-            response = await self.client.send_transaction(signed_transaction)
+            response = await self.client.send_transaction(signed_tx)
 
             if response.value:
                 signature = str(response.value)
