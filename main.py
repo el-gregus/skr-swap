@@ -59,7 +59,10 @@ def create_app() -> FastAPI:
 
     # Initialize Jupiter client
     jupiter_config = config.get("jupiter", {})
-    jupiter = JupiterClient(api_url=jupiter_config.get("api_url", "https://quote-api.jup.ag/v6"))
+    jupiter = JupiterClient(
+        api_url=jupiter_config.get("api_url", "https://quote-api.jup.ag/v6"),
+        api_key=jupiter_config.get("api_key")
+    )
     logger.info("Jupiter client initialized")
 
     # Initialize Solana client

@@ -80,7 +80,7 @@ class SolanaClient:
             return 0
 
         except Exception as e:
-            logger.error("Failed to get token balance: {}", e)
+            logger.error("Failed to get token balance: {}", str(e))
             return None
 
     async def send_transaction(

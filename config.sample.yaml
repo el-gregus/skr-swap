@@ -25,6 +25,7 @@ accounts:
 # Jupiter configuration
 jupiter:
   api_url: "${JUPITER_API_URL}"
+  api_key: "${JUPITER_API_KEY}"  # Required for Price API V3
   default_slippage_bps: 50  # 0.5%
   compute_unit_price: 100000  # Micro lamports
   priority_fee_multiplier: 1.2

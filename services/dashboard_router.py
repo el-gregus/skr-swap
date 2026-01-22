@@ -287,16 +287,26 @@ async def get_balances(
                 Pubkey.from_string(str(wallet_pubkey)),
                 Pubkey.from_string(tokens["SKR"])
             )
-            skr_balance = (skr_balance_raw / 1e6) if skr_balance_raw else 0
-            
+            # Handle None (error) vs 0 (no balance)
+            if skr_balance_raw is not None:
+                skr_balance = skr_balance_raw / 1e6
+            else:
+                skr_balance = 0
+
             balances.append({
                 "token": "SKR",
                 "balance": skr_balance,
                 "mint": tokens["SKR"],
             })
         except Exception as e:
-            logger.error("Failed to get SKR balance: {}", e)
-    
+            logger.error("Failed to get SKR balance: {}", str(e))
+            # Add entry with 0 balance on error to prevent missing from dashboard
+            balances.append({
+                "token": "SKR",
+                "balance": 0,
+                "mint": tokens["SKR"],
+            })
+
     # Get USD prices from Jupiter (API key configured)
     token_mints = [b["mint"] for b in balances]
     prices = {}
@@ -306,7 +316,7 @@ async def get_balances(
         if price_data:
             prices = price_data
     except Exception as e:
-        logger.error("Failed to get token prices: {}", e)
+        logger.error("Failed to get token prices: {}", str(e))
     
     # Add USD values
     total_usd = 0

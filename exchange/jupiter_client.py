@@ -7,9 +7,16 @@ from loguru import logger
 class JupiterClient:
     """Client for Jupiter swap aggregator API."""
 
-    def __init__(self, api_url: str = "https://quote-api.jup.ag/v6"):
+    def __init__(self, api_url: str = "https://quote-api.jup.ag/v6", api_key: Optional[str] = None):
         self.api_url = api_url.rstrip("/")
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.api_key = api_key
+
+        # Set up headers with API key if provided
+        headers = {}
+        if api_key:
+            headers["x-api-key"] = api_key
+
+        self.client = httpx.AsyncClient(timeout=30.0, headers=headers)
 
     async def close(self):
         """Close the HTTP client."""
@@ -117,37 +124,52 @@ class JupiterClient:
     async def get_token_price(
         self,
         token_ids: list[str],
-        vs_token: str = "So11111111111111111111111111111111111111112"  # SOL
+        vs_token: str = "USDC"  # Changed to USDC as that's what V3 uses
     ) -> Optional[Dict[str, float]]:
         """
-        Get token prices from Jupiter Price API.
+        Get token prices from Jupiter Price API V3.
 
         Args:
             token_ids: List of token mint addresses
-            vs_token: Base token to price against (default: SOL)
+            vs_token: Base token to price against (default: USDC for USD prices)
 
         Returns:
-            Dictionary of {mint: price} or None if failed
+            Dictionary of {mint: price in USD} or None if failed
         """
+        if not self.api_key:
+            logger.warning("Jupiter API key not configured, skipping price fetch")
+            return None
+
         try:
             params = {
                 "ids": ",".join(token_ids),
-                "vsToken": vs_token,
             }
 
+            # Use V3 API endpoint (requires API key)
             response = await self.client.get(
-                "https://price.jup.ag/v4/price",
+                "https://api.jup.ag/price/v3",
                 params=params
             )
             response.raise_for_status()
 
             data = response.json()
             prices = {}
-            for mint, info in data.get("data", {}).items():
-                prices[mint] = float(info.get("price", 0))
 
+            # V3 format: {"data": {"mint": {"usdPrice": "123.45", ...}, ...}}
+            for mint, info in data.get("data", {}).items():
+                price_str = info.get("usdPrice")
+                if price_str:
+                    prices[mint] = float(price_str)
+
+            logger.debug("Fetched prices for {} tokens", len(prices))
             return prices
 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                logger.error("Jupiter API key is invalid or not authorized")
+            else:
+                logger.error("Failed to fetch token prices: HTTP {}", e.response.status_code)
+            return None
         except Exception as e:
-            logger.error("Failed to fetch token prices: {}", e)
+            logger.error("Failed to fetch token prices: {}", str(e))
             return None
