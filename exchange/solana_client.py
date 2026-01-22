@@ -6,6 +6,7 @@ from solana.rpc.commitment import Confirmed
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.transaction import VersionedTransaction
+from solders import message
 from solders.signature import Signature
 from loguru import logger
 
@@ -102,10 +103,11 @@ class SolanaClient:
             transaction = VersionedTransaction.from_bytes(tx_bytes)
 
             # Sign transaction
-            transaction.sign([keypair])
+            signature = keypair.sign_message(message.to_bytes_versioned(transaction.message))
+            signed_transaction = VersionedTransaction.populate(transaction.message, [signature])
 
             # Send transaction
-            response = await self.client.send_transaction(transaction)
+            response = await self.client.send_transaction(signed_transaction)
 
             if response.value:
                 signature = str(response.value)

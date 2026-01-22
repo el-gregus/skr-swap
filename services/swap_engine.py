@@ -1,6 +1,6 @@
 """Swap strategy engine for processing signals."""
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Dict, Any, Optional
 from loguru import logger
 
 from models.schemas import Signal, SwapRequest
@@ -26,6 +26,7 @@ class SwapEngine:
         self.analytics = analytics
         self.swap_manager = swap_manager
         self.last_swap_time: Dict[str, datetime] = {}
+        self.last_action: Optional[str] = None  # Track last executed action
 
     async def process_signal(self, signal: Signal) -> None:
         """
@@ -92,6 +93,8 @@ class SwapEngine:
                 result.signature[:16] if result.signature else "?"
             )
             self.last_swap_time[signal.symbol] = datetime.utcnow()
+            # Update last action after successful swap
+            self.last_action = signal.action
         else:
             logger.error(
                 "[{}] Swap failed: {}",
@@ -104,6 +107,16 @@ class SwapEngine:
         # Basic validation
         if signal.action not in ("BUY", "SELL"):
             logger.warning("[{}] Invalid signal action: {}", self.account_id, signal.action)
+            return False
+
+        # Prevent consecutive duplicate actions
+        if self.last_action is not None and signal.action == self.last_action:
+            logger.warning(
+                "[{}] Rejecting consecutive {} signal (last action was {})",
+                self.account_id,
+                signal.action,
+                self.last_action
+            )
             return False
 
         return True
