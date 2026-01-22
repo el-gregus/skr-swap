@@ -17,7 +17,7 @@ accounts:
       base_token: "SOL"
       quote_token: "SKR"
       default_swap_size: 0.1  # 0.1 SOL
-      max_slippage_bps: 200  # 2%
+      max_slippage_bps: 300  # 3%
       min_time_between_swaps: 30  # seconds
       min_skr_threshold: 0.1  # Minimum SKR to consider "holding" (for position checks)
       min_sol_reserve: 0.01  # Reserve SOL for transaction fees

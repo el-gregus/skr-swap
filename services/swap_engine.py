@@ -102,11 +102,13 @@ class SwapEngine:
 
         # Execute swap
         logger.info(
-            "[{}] Executing swap: {} {} → {}",
+            "[{}] Executing swap: {} {} → {} (slippage: {}bps / {}%)",
             self.account_id,
             amount,
             input_token,
-            output_token
+            output_token,
+            slippage_bps,
+            slippage_bps / 100.0
         )
 
         result = await self.swap_manager.execute_swap(swap_request)
