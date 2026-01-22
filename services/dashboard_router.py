@@ -297,10 +297,10 @@ async def get_balances(
         except Exception as e:
             logger.error("Failed to get SKR balance: {}", e)
     
-    # Get USD prices from Jupiter
+    # Get USD prices from Jupiter (API key configured)
     token_mints = [b["mint"] for b in balances]
     prices = {}
-    
+
     try:
         price_data = await jupiter.get_token_price(token_mints)
         if price_data:

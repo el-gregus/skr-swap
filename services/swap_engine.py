@@ -173,23 +173,70 @@ class SwapEngine:
                 return self.strategy.get("default_swap_size", 0.1)
 
         elif action == "BUY":
-            # Use SOL amount from previous SELL
+            # Determine target swap amount
             if self.last_swap_output_amount is not None:
+                target_amount = self.last_swap_output_amount
                 logger.info(
                     "[{}] Using saved SOL amount from last SELL: {}",
                     self.account_id,
-                    self.last_swap_output_amount
+                    target_amount
                 )
-                return self.last_swap_output_amount
             else:
                 # First BUY or no previous SELL
-                default_amount = self.strategy.get("default_swap_size", 0.1)
+                target_amount = self.strategy.get("default_swap_size", 0.1)
                 logger.info(
                     "[{}] No previous SELL amount, using default: {}",
                     self.account_id,
-                    default_amount
+                    target_amount
                 )
-                return default_amount
+
+            # Check available SOL balance
+            if not self.solana_client or not self.keypair:
+                logger.warning("[{}] Cannot check SOL balance: missing client/keypair", self.account_id)
+                return target_amount
+
+            try:
+                sol_balance = await self.solana_client.get_balance(
+                    Pubkey.from_string(str(self.keypair.pubkey()))
+                )
+
+                if sol_balance is None:
+                    logger.warning("[{}] Failed to get SOL balance", self.account_id)
+                    return target_amount
+
+                # Convert lamports to SOL
+                sol_balance_tokens = sol_balance / 1e9
+                # Reserve for fees
+                min_reserve = self.strategy.get("min_sol_reserve", 0.01)
+                available_sol = sol_balance_tokens - min_reserve
+
+                logger.info(
+                    "[{}] SOL balance: {} (available: {} after {} reserve)",
+                    self.account_id,
+                    sol_balance_tokens,
+                    available_sol,
+                    min_reserve
+                )
+
+                if available_sol <= 0:
+                    logger.warning("[{}] Insufficient SOL balance for swap", self.account_id)
+                    return None
+
+                # Use lesser of target amount or available balance
+                swap_amount = min(target_amount, available_sol)
+                if swap_amount < target_amount:
+                    logger.warning(
+                        "[{}] Reducing swap from {} to {} SOL (insufficient balance)",
+                        self.account_id,
+                        target_amount,
+                        swap_amount
+                    )
+
+                return swap_amount
+
+            except Exception as e:
+                logger.error("[{}] Failed to check SOL balance: {}", self.account_id, e)
+                return target_amount
 
         return None
 
