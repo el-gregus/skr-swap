@@ -197,6 +197,7 @@ async def dashboard_home():
                 padding: 12px;
                 text-align: left;
                 border-bottom: 1px solid #444;
+                font-size: 13px;
             }
             th {
                 background: #333;
@@ -399,7 +400,6 @@ async def dashboard_home():
                                 <th>USD Value</th>
                                 <th>Fee (USD)</th>
                                 <th>Status</th>
-                                <th>Signature</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -422,7 +422,6 @@ async def dashboard_home():
                                     <td>${usdDisplay}</td>
                                     <td>${feeDisplay}</td>
                                     <td class="${swap.status.toLowerCase()}">${swap.status}</td>
-                                    <td>${swap.signature ? swap.signature.slice(0, 16) + '...' : '-'}</td>
                                 </tr>
                                 `;
                             }).join('')}
