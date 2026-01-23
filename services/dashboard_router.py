@@ -177,21 +177,31 @@ async def dashboard_home():
                                 <th>Account</th>
                                 <th>Swap</th>
                                 <th>Amount</th>
+                                <th>USD Value</th>
                                 <th>Status</th>
                                 <th>Signature</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.swaps.map(swap => `
+                            ${data.swaps.map(swap => {
+                                const inputUsd = swap.input_usd || 0;
+                                const outputUsd = swap.output_usd || 0;
+                                const usdDisplay = swap.status === 'completed'
+                                    ? `$${inputUsd.toFixed(2)} → $${outputUsd.toFixed(2)}`
+                                    : `$${inputUsd.toFixed(2)}`;
+
+                                return `
                                 <tr>
                                     <td>${formatNLTime(swap.created_at)}</td>
                                     <td>${swap.account_label || swap.account_id}</td>
                                     <td>${swap.input_token} → ${swap.output_token}</td>
                                     <td>${swap.input_amount.toFixed(4)} → ${(swap.output_amount || 0).toFixed(4)}</td>
+                                    <td>${usdDisplay}</td>
                                     <td class="${swap.status.toLowerCase()}">${swap.status}</td>
                                     <td>${swap.signature ? swap.signature.slice(0, 16) + '...' : '-'}</td>
                                 </tr>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </tbody>
                     </table>
                 `;
@@ -286,7 +296,7 @@ async def get_swaps(
     account_id: Optional[str] = None,
     status: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Get swap history."""
+    """Get swap history with USD values."""
     analytics = _get_analytics(request)
 
     swaps = analytics.list_swaps(
@@ -294,6 +304,50 @@ async def get_swaps(
         status=status,
         limit=limit,
     )
+
+    # Get token configuration and Jupiter client
+    config = getattr(request.app.state, "config", {})
+    tokens = config.get("tokens", {})
+    jupiter = getattr(request.app.state, "jupiter", None)
+
+    # Fetch current token prices
+    prices = {}
+    if jupiter:
+        try:
+            # Collect unique token mints from swaps
+            token_mints = set()
+            for swap in swaps:
+                input_token = swap.get("input_token")
+                output_token = swap.get("output_token")
+                if input_token in tokens:
+                    token_mints.add(tokens[input_token])
+                if output_token in tokens:
+                    token_mints.add(tokens[output_token])
+
+            # Fetch prices for all unique tokens
+            if token_mints:
+                price_data = await jupiter.get_token_price(list(token_mints))
+                if price_data:
+                    prices = price_data
+        except Exception as e:
+            logger.error("Failed to fetch token prices for swaps: {}", e)
+
+    # Add USD values to each swap
+    for swap in swaps:
+        input_token = swap.get("input_token")
+        output_token = swap.get("output_token")
+        input_amount = swap.get("input_amount", 0)
+        output_amount = swap.get("output_amount", 0)
+
+        # Get prices
+        input_mint = tokens.get(input_token)
+        output_mint = tokens.get(output_token)
+        input_price = prices.get(input_mint, 0) if input_mint else 0
+        output_price = prices.get(output_mint, 0) if output_mint else 0
+
+        # Calculate USD values
+        swap["input_usd"] = input_amount * input_price
+        swap["output_usd"] = output_amount * output_price if output_amount else 0
 
     return {"swaps": swaps}
 
