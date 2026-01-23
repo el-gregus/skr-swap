@@ -52,6 +52,46 @@ async def dashboard_home():
                 justify-content: space-between;
                 align-items: flex-start;
                 margin-bottom: 20px;
+                gap: 20px;
+            }
+            .price-charts {
+                flex: 1;
+                display: grid;
+                grid-template-columns: repeat(2, minmax(200px, 1fr));
+                gap: 12px;
+                margin-top: 6px;
+            }
+            .price-card {
+                background: #202020;
+                border: 1px solid #333;
+                border-radius: 8px;
+                padding: 10px 12px;
+            }
+            .price-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+                margin-bottom: 6px;
+            }
+            .price-title {
+                font-size: 12px;
+                color: #aaa;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+            }
+            .price-value {
+                font-size: 16px;
+                font-weight: 600;
+            }
+            .price-change {
+                font-size: 12px;
+                font-weight: 600;
+            }
+            .price-change.up { color: #00d4aa; }
+            .price-change.down { color: #ff6666; }
+            .price-chart {
+                width: 100%;
+                height: 70px;
             }
             .clock-container {
                 text-align: right;
@@ -96,6 +136,24 @@ async def dashboard_home():
         <div class="container">
             <div class="header-container">
                 <h1>🔄 SKR Swap Dashboard</h1>
+                <div class="price-charts">
+                    <div class="price-card" id="price-card-sol">
+                        <div class="price-header">
+                            <div class="price-title">SOL (24h)</div>
+                            <div class="price-change" id="price-change-sol">--</div>
+                        </div>
+                        <div class="price-value" id="price-value-sol">$--</div>
+                        <div class="price-chart" id="price-chart-sol"></div>
+                    </div>
+                    <div class="price-card" id="price-card-skr">
+                        <div class="price-header">
+                            <div class="price-title">SKR (24h)</div>
+                            <div class="price-change" id="price-change-skr">--</div>
+                        </div>
+                        <div class="price-value" id="price-value-skr">$--</div>
+                        <div class="price-chart" id="price-chart-skr"></div>
+                    </div>
+                </div>
                 <div class="clock-container">
                     <div class="clock-nl" id="clock-nl">--:--:-- --</div>
                     <div class="clock-utc" id="clock-utc">UTC: --:--:--</div>
@@ -164,6 +222,68 @@ async def dashboard_home():
             // Update clocks every second
             updateClocks();
             setInterval(updateClocks, 1000);
+
+            function renderSparkline(prices, width = 240, height = 70) {
+                if (!prices || prices.length < 2) {
+                    return '<div style="color:#666;font-size:12px;">No data yet</div>';
+                }
+
+                const values = prices.map(p => p.price);
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const range = max - min || 1;
+
+                const points = prices.map((p, i) => {
+                    const x = (i / (prices.length - 1)) * (width - 4) + 2;
+                    const y = height - ((p.price - min) / range) * (height - 10) - 5;
+                    return `${x.toFixed(2)},${y.toFixed(2)}`;
+                }).join(" ");
+
+                return `
+                    <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%">
+                        <polyline points="${points}" fill="none" stroke="#00d4aa" stroke-width="2" />
+                    </svg>
+                `;
+            }
+
+            function updatePriceCard(symbol, data) {
+                const prices = data.prices || [];
+                const current = data.current_price ?? null;
+                const changePct = data.change_pct ?? null;
+                const priceDecimals = symbol === "SOL" ? 2 : 4;
+
+                const valueEl = document.getElementById(`price-value-${symbol.toLowerCase()}`);
+                const changeEl = document.getElementById(`price-change-${symbol.toLowerCase()}`);
+                const chartEl = document.getElementById(`price-chart-${symbol.toLowerCase()}`);
+
+                if (current === null) {
+                    valueEl.textContent = "$--";
+                    changeEl.textContent = "--";
+                    chartEl.innerHTML = renderSparkline(prices);
+                    return;
+                }
+
+                valueEl.textContent = `$${current.toFixed(priceDecimals)}`;
+                if (changePct === null) {
+                    changeEl.textContent = "--";
+                    changeEl.className = "price-change";
+                } else {
+                    const sign = changePct >= 0 ? "+" : "";
+                    changeEl.textContent = `${sign}${changePct.toFixed(2)}%`;
+                    changeEl.className = `price-change ${changePct >= 0 ? "up" : "down"}`;
+                }
+
+                chartEl.innerHTML = renderSparkline(prices);
+            }
+
+            async function loadPriceCharts() {
+                const response = await fetch('/api/price-history?symbols=SOL,SKR');
+                const data = await response.json();
+                if (data && data.data) {
+                    updatePriceCard("SOL", data.data.SOL || {});
+                    updatePriceCard("SKR", data.data.SKR || {});
+                }
+            }
 
             async function loadSwaps() {
                 const response = await fetch('/api/swaps?limit=10');
@@ -281,17 +401,48 @@ async def dashboard_home():
             loadSwaps();
             loadSignals();
             loadBalances();
+            loadPriceCharts();
 
             // Refresh every 5 seconds
             setInterval(() => {
                 loadSwaps();
                 loadSignals();
                 loadBalances();
+                loadPriceCharts();
             }, 5000);
         </script>
     </body>
     </html>
     """
+
+
+@router.get("/api/price-history")
+async def get_price_history(
+    request: Request,
+    symbols: str = "SOL,SKR",
+) -> Dict[str, Any]:
+    """Get 24h price history for one or more symbols."""
+    analytics = _get_analytics(request)
+    data: Dict[str, Any] = {}
+
+    for raw_symbol in symbols.split(","):
+        symbol = raw_symbol.strip().upper()
+        if not symbol:
+            continue
+
+        ticks = analytics.list_price_ticks(symbol=symbol, hours=24)
+        current_price = ticks[-1]["price"] if ticks else None
+        change_pct = None
+        if len(ticks) >= 2 and ticks[0]["price"]:
+            change_pct = ((current_price - ticks[0]["price"]) / ticks[0]["price"]) * 100
+
+        data[symbol] = {
+            "prices": ticks,
+            "current_price": current_price,
+            "change_pct": change_pct,
+        }
+
+    return {"data": data}
 
 
 @router.get("/api/swaps")

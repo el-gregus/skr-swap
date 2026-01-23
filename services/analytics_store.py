@@ -300,6 +300,28 @@ class AnalyticsStore:
                 (symbol, price, timestamp),
             )
 
+    def list_price_ticks(
+        self,
+        symbol: str,
+        hours: int = 24,
+        limit: int = 1440,
+    ) -> List[Dict[str, Any]]:
+        """List price ticks for a symbol in the last N hours."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT price, timestamp
+                FROM price_ticks
+                WHERE symbol = ? AND timestamp >= ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (symbol, cutoff, limit),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
     def cleanup_old_prices(self, days: int = 7) -> int:
         """Delete price ticks older than N days."""
         from datetime import timedelta

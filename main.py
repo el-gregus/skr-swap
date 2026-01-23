@@ -1,4 +1,5 @@
 """SKR Swap Bot - Solana token swap bot powered by Jupiter."""
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,48 @@ from exchange.jupiter_client import JupiterClient
 from exchange.solana_client import SolanaClient
 
 
+async def _price_poller(app: FastAPI) -> None:
+    """Background task to record token prices for dashboard charts."""
+    config = getattr(app.state, "config", {})
+    analytics = getattr(app.state, "analytics", None)
+    jupiter = getattr(app.state, "jupiter", None)
+
+    if not analytics or not jupiter:
+        logger.warning("Price poller disabled: missing analytics or Jupiter client")
+        return
+
+    tokens = config.get("tokens", {})
+    symbols = ["SOL", "SKR"]
+    symbol_mints = {symbol: tokens.get(symbol) for symbol in symbols}
+    poll_interval = config.get("dashboard", {}).get("price_poll_interval", 60)
+
+    while True:
+        try:
+            if not getattr(jupiter, "api_key", None):
+                await asyncio.sleep(poll_interval)
+                continue
+
+            mints = [mint for mint in symbol_mints.values() if mint]
+            if not mints:
+                await asyncio.sleep(poll_interval)
+                continue
+
+            prices = await jupiter.get_token_price(mints)
+            if prices:
+                for symbol, mint in symbol_mints.items():
+                    if not mint:
+                        continue
+                    price = prices.get(mint)
+                    if price is not None:
+                        analytics.record_price(symbol, float(price))
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.warning("Price poller error: {}", exc)
+
+        await asyncio.sleep(poll_interval)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -27,10 +70,22 @@ async def lifespan(app: FastAPI):
     if removed:
         logger.info("Cleaned up {} old price records", removed)
 
+    # Start background price polling
+    app.state.price_task = asyncio.create_task(_price_poller(app))
+
     yield
 
     # Shutdown
     logger.info("Shutting down SKR Swap Bot...")
+
+    # Stop background price polling
+    price_task = getattr(app.state, "price_task", None)
+    if price_task:
+        price_task.cancel()
+        try:
+            await price_task
+        except asyncio.CancelledError:
+            pass
 
     # Close clients
     if hasattr(app.state, "jupiter"):
