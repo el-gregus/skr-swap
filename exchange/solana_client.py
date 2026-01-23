@@ -214,7 +214,7 @@ class SolanaClient:
         """Fetch the transaction fee (lamports) for a confirmed signature."""
         try:
             sig = Signature.from_string(signature)
-            response = await self.client.get_transaction(sig, max_supported_transaction_version=None)
+            response = await self.client.get_transaction(sig, max_supported_transaction_version=0)
             if response and response.value and response.value.transaction:
                 meta = response.value.transaction.meta
                 if meta:
