@@ -397,6 +397,7 @@ async def dashboard_home():
                                 <th>Swap</th>
                                 <th>Amount</th>
                                 <th>USD Value</th>
+                                <th>Fee (USD)</th>
                                 <th>Status</th>
                                 <th>Signature</th>
                             </tr>
@@ -408,6 +409,9 @@ async def dashboard_home():
                                 const usdDisplay = swap.status === 'COMPLETED'
                                     ? `$${inputUsd.toFixed(2)} → $${outputUsd.toFixed(2)}`
                                     : `$${inputUsd.toFixed(2)}`;
+                                const feeDisplay = swap.fee_usd == null
+                                    ? '-'
+                                    : `$${Number(swap.fee_usd).toFixed(2)}`;
 
                                 return `
                                 <tr>
@@ -416,6 +420,7 @@ async def dashboard_home():
                                     <td>${swap.input_token} → ${swap.output_token}</td>
                                     <td>${swap.input_amount.toFixed(4)} → ${(swap.output_amount || 0).toFixed(4)}</td>
                                     <td>${usdDisplay}</td>
+                                    <td>${feeDisplay}</td>
                                     <td class="${swap.status.toLowerCase()}">${swap.status}</td>
                                     <td>${swap.signature ? swap.signature.slice(0, 16) + '...' : '-'}</td>
                                 </tr>

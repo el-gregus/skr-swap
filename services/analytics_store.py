@@ -54,6 +54,8 @@ class AnalyticsStore:
                     output_amount REAL,
                     price REAL,
                     slippage REAL,
+                    fee_lamports INTEGER,
+                    fee_usd REAL,
                     signature TEXT,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -82,6 +84,14 @@ class AnalyticsStore:
                 pass
             try:
                 conn.execute("ALTER TABLE swaps ADD COLUMN output_usd REAL")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN fee_lamports INTEGER")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN fee_usd REAL")
             except sqlite3.OperationalError:
                 pass
 
@@ -178,6 +188,8 @@ class AnalyticsStore:
         slippage: Optional[float] = None,
         output_token_usd_price: Optional[float] = None,
         output_usd: Optional[float] = None,
+        fee_lamports: Optional[int] = None,
+        fee_usd: Optional[float] = None,
     ) -> None:
         """Mark a swap as completed with USD prices at trade time."""
         completed_at = datetime.now(timezone.utc).isoformat()
@@ -193,11 +205,13 @@ class AnalyticsStore:
                     slippage = ?,
                     completed_at = ?,
                     output_token_usd_price = ?,
-                    output_usd = ?
+                    output_usd = ?,
+                    fee_lamports = ?,
+                    fee_usd = ?
                 WHERE id = ?
                 """,
                 (signature, output_amount, price, slippage, completed_at,
-                 output_token_usd_price, output_usd, swap_id),
+                 output_token_usd_price, output_usd, fee_lamports, fee_usd, swap_id),
             )
 
     def fail_swap(self, swap_id: int, error: str) -> None:

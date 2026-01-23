@@ -209,3 +209,15 @@ class SolanaClient:
         except Exception as e:
             logger.error("Failed to confirm transaction: {}", e)
             return False
+
+    async def get_transaction_fee(self, signature: str) -> Optional[int]:
+        """Fetch the transaction fee (lamports) for a confirmed signature."""
+        try:
+            sig = Signature.from_string(signature)
+            response = await self.client.get_transaction(sig, max_supported_transaction_version=0)
+            if response and response.value and response.value.meta:
+                return response.value.meta.fee
+            return None
+        except Exception as e:
+            logger.error("Failed to get transaction fee: {}", e)
+            return None

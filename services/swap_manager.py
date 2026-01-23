@@ -125,6 +125,10 @@ class SwapManager:
             if not confirmed:
                 logger.warning("[{}] Transaction sent but confirmation failed: {}", self.account_id, signature)
 
+            # Fetch transaction fee (lamports)
+            fee_lamports = await self.solana.get_transaction_fee(signature)
+            fee_usd = None
+
             # Calculate output amount and price
             output_lamports = int(quote.get("outAmount", 0))
             output_amount = format_lamports(output_lamports, decimals=output_decimals)
@@ -141,6 +145,17 @@ class SwapManager:
             except Exception as e:
                 logger.warning("[{}] Failed to fetch output USD price: {}", self.account_id, e)
 
+            # Calculate fee USD if possible (fees are in SOL)
+            if fee_lamports is not None:
+                fee_sol = format_lamports(fee_lamports, decimals=9)
+                sol_usd_price = None
+                if request.input_token.upper() == "SOL":
+                    sol_usd_price = input_token_usd_price
+                elif request.output_token.upper() == "SOL":
+                    sol_usd_price = output_token_usd_price
+                if sol_usd_price:
+                    fee_usd = fee_sol * sol_usd_price
+
             # Mark swap as completed with USD prices
             self.analytics.complete_swap(
                 swap_id=swap_id,
@@ -150,6 +165,8 @@ class SwapManager:
                 slippage=float(quote.get("priceImpactPct", 0)),
                 output_token_usd_price=output_token_usd_price,
                 output_usd=output_usd,
+                fee_lamports=fee_lamports,
+                fee_usd=fee_usd,
             )
 
             logger.info(
