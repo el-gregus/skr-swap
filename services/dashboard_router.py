@@ -186,9 +186,9 @@ async def dashboard_home():
                             ${data.swaps.map(swap => {
                                 const inputUsd = swap.input_usd || 0;
                                 const outputUsd = swap.output_usd || 0;
-                                const usdDisplay = swap.status === 'completed'
-                                    ? `$${inputUsd.toFixed(2)} → $${outputUsd.toFixed(2)}`
-                                    : `$${inputUsd.toFixed(2)}`;
+                                const usdDisplay = swap.status === 'COMPLETED'
+                                    ? `$${inputUsd.toFixed(4)} → $${outputUsd.toFixed(4)}`
+                                    : `$${inputUsd.toFixed(4)}`;
 
                                 return `
                                 <tr>
@@ -231,8 +231,8 @@ async def dashboard_home():
                                 <tr>
                                     <td><strong>${b.token}</strong></td>
                                     <td>${b.balance.toFixed(6)}</td>
-                                    <td>$${(b.price_usd || 0).toFixed(2)}</td>
-                                    <td>$${(b.value_usd || 0).toFixed(2)}</td>
+                                    <td>$${(b.price_usd || 0).toFixed(4)}</td>
+                                    <td>$${(b.value_usd || 0).toFixed(4)}</td>
                                 </tr>
                             `).join("")}
                         </tbody>
