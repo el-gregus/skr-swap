@@ -174,6 +174,20 @@ async def dashboard_home():
             .section h2 {
                 margin-top: 0;
             }
+            .section-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 8px;
+            }
+            .section-header h2 {
+                margin: 0;
+            }
+            .total-value {
+                font-size: 14px;
+                font-weight: 600;
+                color: #00d4aa;
+            }
             table {
                 width: 100%;
                 border-collapse: collapse;
@@ -242,7 +256,10 @@ async def dashboard_home():
                 </div>
             </div>
             <div class="section">
-                <h2>💰 Wallet Balances</h2>
+                <div class="section-header">
+                    <h2>💰 Wallet Balances</h2>
+                    <div id="balances-total" class="total-value">Total Value: --</div>
+                </div>
                 <div id="balances" class="loading">Loading...</div>
             </div>
 
@@ -419,10 +436,8 @@ async def dashboard_home():
                 const data = await response.json();
 
                 let totalUsd = data.total_usd || 0;
+                document.getElementById("balances-total").textContent = `Total Value: $${totalUsd.toFixed(2)} USD`;
                 const html = `
-                    <div style="margin-bottom: 15px;">
-                        <strong>Total Value:</strong> $${totalUsd.toFixed(2)} USD
-                    </div>
                     <table>
                         <thead>
                             <tr>
@@ -439,7 +454,7 @@ async def dashboard_home():
                                 const priceDecimals = isSol ? 2 : 4;
                                 return `
                                 <tr>
-                                    <td><strong>${b.token}</strong></td>
+                                    <td>${b.token}</td>
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
