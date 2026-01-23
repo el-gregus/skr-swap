@@ -109,6 +109,16 @@ async def dashboard_home():
                 border-radius: 8px;
                 padding: 10px 12px;
             }
+            .price-body {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .price-meta {
+                display: flex;
+                flex-direction: column;
+                min-width: 90px;
+            }
             .price-header {
                 display: flex;
                 justify-content: space-between;
@@ -134,7 +144,7 @@ async def dashboard_home():
             .price-change.down { color: #ff6666; }
             .price-chart {
                 width: 100%;
-                height: 70px;
+                height: 44px;
             }
             .clock-container {
                 text-align: right;
@@ -202,17 +212,25 @@ async def dashboard_home():
                         <div class="price-header">
                             <div class="price-title">SOL (24h)</div>
                         </div>
-                        <div class="price-value" id="price-value-sol">$--</div>
-                        <div class="price-change" id="price-change-sol">--</div>
-                        <div class="price-chart" id="price-chart-sol"></div>
+                        <div class="price-body">
+                            <div class="price-meta">
+                                <div class="price-value" id="price-value-sol">$--</div>
+                                <div class="price-change" id="price-change-sol">--</div>
+                            </div>
+                            <div class="price-chart" id="price-chart-sol"></div>
+                        </div>
                     </div>
                     <div class="price-card" id="price-card-skr">
                         <div class="price-header">
                             <div class="price-title">SKR (24h)</div>
                         </div>
-                        <div class="price-value" id="price-value-skr">$--</div>
-                        <div class="price-change" id="price-change-skr">--</div>
-                        <div class="price-chart" id="price-chart-skr"></div>
+                        <div class="price-body">
+                            <div class="price-meta">
+                                <div class="price-value" id="price-value-skr">$--</div>
+                                <div class="price-change" id="price-change-skr">--</div>
+                            </div>
+                            <div class="price-chart" id="price-chart-skr"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="clock-container">
@@ -284,7 +302,7 @@ async def dashboard_home():
             updateClocks();
             setInterval(updateClocks, 1000);
 
-            function renderSparkline(prices, width = 240, height = 70) {
+            function renderSparkline(prices, width = 220, height = 44) {
                 if (!prices || prices.length < 2) {
                     return '<div style="color:#666;font-size:12px;">No data yet</div>';
                 }
