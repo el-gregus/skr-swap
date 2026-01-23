@@ -168,8 +168,11 @@ async def dashboard_home():
             .section {
                 background: #2a2a2a;
                 padding: 20px;
-                margin: 20px 0;
+                margin: 12px 0;
                 border-radius: 8px;
+            }
+            .section h2 {
+                margin-top: 0;
             }
             table {
                 width: 100%;
