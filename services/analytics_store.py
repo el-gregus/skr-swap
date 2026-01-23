@@ -241,6 +241,31 @@ class AnalyticsStore:
             cur = conn.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
+    def get_last_completed_swap(
+        self,
+        account_id: str,
+        input_token: Optional[str] = None,
+        output_token: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Get the most recent completed swap for an account (optional token filters)."""
+        query = "SELECT * FROM swaps WHERE account_id = ? AND status = 'COMPLETED'"
+        params: List[Any] = [account_id]
+
+        if input_token:
+            query += " AND input_token = ?"
+            params.append(input_token)
+
+        if output_token:
+            query += " AND output_token = ?"
+            params.append(output_token)
+
+        query += " ORDER BY completed_at DESC LIMIT 1"
+
+        with self._connect() as conn:
+            cur = conn.execute(query, params)
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def list_signals(
         self,
         account_id: Optional[str] = None,

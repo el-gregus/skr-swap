@@ -281,13 +281,42 @@ class SwapEngine:
                     target_amount
                 )
             else:
-                # First BUY or no previous SELL
-                target_amount = self.strategy.get("default_swap_size", 0.1)
-                logger.info(
-                    "[{}] No previous SELL amount, using default: {}",
-                    self.account_id,
-                    target_amount
-                )
+                # Try to load last SELL output from analytics history
+                try:
+                    base_token = self.strategy.get("base_token", "SOL")
+                    quote_token = self.strategy.get("quote_token", "SKR")
+                    last_swap = self.analytics.get_last_completed_swap(
+                        account_id=self.account_id,
+                        input_token=quote_token,
+                        output_token=base_token,
+                    )
+                    if last_swap and last_swap.get("output_amount") is not None:
+                        self.last_swap_output_amount = float(last_swap["output_amount"])
+                        target_amount = self.last_swap_output_amount
+                        logger.info(
+                            "[{}] Loaded last SELL output from history: {}",
+                            self.account_id,
+                            target_amount
+                        )
+                    else:
+                        target_amount = self.strategy.get("default_swap_size", 0.1)
+                        logger.info(
+                            "[{}] No previous SELL amount, using default: {}",
+                            self.account_id,
+                            target_amount
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "[{}] Failed to load last SELL amount from history: {}",
+                        self.account_id,
+                        e
+                    )
+                    target_amount = self.strategy.get("default_swap_size", 0.1)
+                    logger.info(
+                        "[{}] No previous SELL amount, using default: {}",
+                        self.account_id,
+                        target_amount
+                    )
 
             # Check available SOL balance
             if not self.solana_client or not self.keypair:
