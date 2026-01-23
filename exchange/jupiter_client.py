@@ -155,11 +155,13 @@ class JupiterClient:
             data = response.json()
             prices = {}
 
-            # V3 format: {"data": {"mint": {"usdPrice": "123.45", ...}, ...}}
-            for mint, info in data.get("data", {}).items():
-                price_str = info.get("usdPrice")
-                if price_str:
-                    prices[mint] = float(price_str)
+            # V3 format: {"mint": {"usdPrice": 0.123, ...}, ...}
+            # Response is a flat dict with mints as keys (no "data" wrapper)
+            for mint, info in data.items():
+                if isinstance(info, dict):
+                    price_val = info.get("usdPrice")
+                    if price_val is not None:
+                        prices[mint] = float(price_val)
 
             logger.debug("Fetched prices for {} tokens", len(prices))
             return prices
