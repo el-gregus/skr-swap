@@ -89,6 +89,20 @@ async def dashboard_home():
         </div>
 
         <script>
+            // Format dates in Newfoundland Time
+            function formatNLTime(dateString) {
+                return new Date(dateString).toLocaleString('en-US', {
+                    timeZone: 'America/St_Johns',
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                });
+            }
+
             async function loadSwaps() {
                 const response = await fetch('/api/swaps?limit=10');
                 const data = await response.json();
@@ -97,7 +111,7 @@ async def dashboard_home():
                     <table>
                         <thead>
                             <tr>
-                                <th>Time</th>
+                                <th>Time (NST/NDT)</th>
                                 <th>Account</th>
                                 <th>Swap</th>
                                 <th>Amount</th>
@@ -108,7 +122,7 @@ async def dashboard_home():
                         <tbody>
                             ${data.swaps.map(swap => `
                                 <tr>
-                                    <td>${new Date(swap.created_at).toLocaleString()}</td>
+                                    <td>${formatNLTime(swap.created_at)}</td>
                                     <td>${swap.account_label || swap.account_id}</td>
                                     <td>${swap.input_token} → ${swap.output_token}</td>
                                     <td>${swap.input_amount.toFixed(4)} → ${(swap.output_amount || 0).toFixed(4)}</td>
@@ -163,7 +177,7 @@ async def dashboard_home():
                     <table>
                         <thead>
                             <tr>
-                                <th>Time</th>
+                                <th>Time (NST/NDT)</th>
                                 <th>Action</th>
                                 <th>Symbol</th>
                                 <th>Amount</th>
@@ -173,7 +187,7 @@ async def dashboard_home():
                         <tbody>
                             ${data.signals.map(signal => `
                                 <tr>
-                                    <td>${new Date(signal.received_at).toLocaleString()}</td>
+                                    <td>${formatNLTime(signal.received_at)}</td>
                                     <td>${signal.action}</td>
                                     <td>${signal.symbol}</td>
                                     <td>${signal.amount || '-'}</td>
