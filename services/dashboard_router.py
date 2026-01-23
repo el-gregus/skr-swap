@@ -43,7 +43,30 @@ async def dashboard_home():
                 max-width: 1200px;
                 margin: 0 auto;
             }
-            h1 { color: #00d4aa; }
+            h1 {
+                color: #00d4aa;
+                display: inline-block;
+            }
+            .header-container {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 20px;
+            }
+            .clock-container {
+                text-align: right;
+                font-family: monospace;
+            }
+            .clock-nl {
+                font-size: 24px;
+                font-weight: bold;
+                color: #00d4aa;
+            }
+            .clock-utc {
+                font-size: 14px;
+                color: #888;
+                margin-top: 5px;
+            }
             .section {
                 background: #2a2a2a;
                 padding: 20px;
@@ -71,7 +94,13 @@ async def dashboard_home():
     </head>
     <body>
         <div class="container">
-            <h1>🔄 SKR Swap Dashboard</h1>
+            <div class="header-container">
+                <h1>🔄 SKR Swap Dashboard</h1>
+                <div class="clock-container">
+                    <div class="clock-nl" id="clock-nl">--:--:-- --</div>
+                    <div class="clock-utc" id="clock-utc">UTC: --:--:--</div>
+                </div>
+            </div>
             <div class="section">
                 <h2>💰 Wallet Balances</h2>
                 <div id="balances">Loading...</div>
@@ -89,19 +118,48 @@ async def dashboard_home():
         </div>
 
         <script>
-            // Format dates in Newfoundland Time
+            // Format dates in Newfoundland Time (12-hour format)
             function formatNLTime(dateString) {
                 return new Date(dateString).toLocaleString('en-US', {
                     timeZone: 'America/St_Johns',
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit',
-                    hour: '2-digit',
+                    hour: 'numeric',
                     minute: '2-digit',
                     second: '2-digit',
-                    hour12: false
+                    hour12: true
                 });
             }
+
+            // Update live clocks
+            function updateClocks() {
+                const now = new Date();
+
+                // Newfoundland Time
+                const nlTime = now.toLocaleString('en-US', {
+                    timeZone: 'America/St_Johns',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                });
+                document.getElementById('clock-nl').textContent = nlTime;
+
+                // UTC Time
+                const utcTime = now.toLocaleString('en-US', {
+                    timeZone: 'UTC',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                });
+                document.getElementById('clock-utc').textContent = 'UTC: ' + utcTime;
+            }
+
+            // Update clocks every second
+            updateClocks();
+            setInterval(updateClocks, 1000);
 
             async function loadSwaps() {
                 const response = await fetch('/api/swaps?limit=10');

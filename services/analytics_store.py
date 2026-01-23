@@ -2,7 +2,7 @@
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 
@@ -106,7 +106,7 @@ class AnalyticsStore:
         payload: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Record a received signal."""
-        received_at = datetime.utcnow().isoformat()
+        received_at = datetime.now(timezone.utc).isoformat()
         raw_payload = json.dumps(payload or {}, default=str)
 
         with self._connect() as conn:
@@ -129,7 +129,7 @@ class AnalyticsStore:
         meta: Optional[Dict[str, Any]] = None,
     ) -> int:
         """Create a new swap record."""
-        created_at = datetime.utcnow().isoformat()
+        created_at = datetime.now(timezone.utc).isoformat()
         meta_dump = json.dumps(meta or {}, default=str)
 
         with self._connect() as conn:
@@ -152,7 +152,7 @@ class AnalyticsStore:
         slippage: Optional[float] = None,
     ) -> None:
         """Mark a swap as completed."""
-        completed_at = datetime.utcnow().isoformat()
+        completed_at = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
             conn.execute(
@@ -171,7 +171,7 @@ class AnalyticsStore:
 
     def fail_swap(self, swap_id: int, error: str) -> None:
         """Mark a swap as failed."""
-        completed_at = datetime.utcnow().isoformat()
+        completed_at = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
             conn.execute(
@@ -237,7 +237,7 @@ class AnalyticsStore:
         balance: float,
     ) -> None:
         """Update wallet token balance."""
-        updated_at = datetime.utcnow().isoformat()
+        updated_at = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
             conn.execute(
@@ -261,7 +261,7 @@ class AnalyticsStore:
 
     def record_price(self, symbol: str, price: float) -> None:
         """Record a price tick."""
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
             conn.execute(
@@ -273,7 +273,7 @@ class AnalyticsStore:
         """Delete price ticks older than N days."""
         from datetime import timedelta
 
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
         with self._connect() as conn:
             cur = conn.execute(
