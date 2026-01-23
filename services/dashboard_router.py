@@ -227,14 +227,17 @@ async def dashboard_home():
                             </tr>
                         </thead>
                         <tbody>
-                            ${(data.balances || []).map(b => `
+                            ${(data.balances || []).map(b => {
+                                const priceDecimals = b.token === "SOL" ? 2 : 4;
+                                return `
                                 <tr>
                                     <td><strong>${b.token}</strong></td>
                                     <td>${b.balance.toFixed(6)}</td>
-                                    <td>$${(b.price_usd || 0).toFixed(4)}</td>
+                                    <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
                                 </tr>
-                            `).join("")}
+                                `;
+                            }).join("")}
                         </tbody>
                     </table>
                 `;
