@@ -215,8 +215,10 @@ class SolanaClient:
         try:
             sig = Signature.from_string(signature)
             response = await self.client.get_transaction(sig, max_supported_transaction_version=None)
-            if response and response.value and response.value.meta:
-                return response.value.meta.fee
+            if response and response.value and response.value.transaction:
+                meta = response.value.transaction.meta
+                if meta:
+                    return meta.fee
             return None
         except Exception as e:
             logger.error("Failed to get transaction fee: {}", e)
