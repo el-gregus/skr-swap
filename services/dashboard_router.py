@@ -428,15 +428,17 @@ async def dashboard_home():
             }
 
             async function loadBalances() {
+                const balancesEl = document.getElementById("balances");
                 const response = await fetch("/api/balances/wallet-1");
                 if (!response.ok) {
-                    document.getElementById("balances").innerHTML = '<div class="loading">Failed to load balances</div>';
+                    balancesEl.innerHTML = '<div class="loading">Failed to load balances</div>';
                     return;
                 }
                 const data = await response.json();
 
                 let totalUsd = data.total_usd || 0;
                 document.getElementById("balances-total").textContent = `Total Value: $${totalUsd.toFixed(2)} USD`;
+                balancesEl.classList.remove("loading");
                 const html = `
                     <table>
                         <thead>
@@ -464,7 +466,7 @@ async def dashboard_home():
                         </tbody>
                     </table>
                 `;
-                document.getElementById("balances").innerHTML = html;
+                balancesEl.innerHTML = html;
             }
 
             async function loadSignals() {
