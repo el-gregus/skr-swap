@@ -51,9 +51,10 @@ async def dashboard_home():
             .header-container {
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 20px;
+                align-items: center;
+                margin-bottom: 26px;
                 gap: 20px;
+                padding-top: 6px;
             }
             .brand {
                 display: flex;
@@ -100,7 +101,7 @@ async def dashboard_home():
                 display: grid;
                 grid-template-columns: repeat(2, minmax(200px, 1fr));
                 gap: 12px;
-                margin-top: 6px;
+                margin-top: 10px;
             }
             .price-card {
                 background: #202020;
@@ -125,8 +126,9 @@ async def dashboard_home():
                 font-weight: 600;
             }
             .price-change {
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 600;
+                margin-top: 2px;
             }
             .price-change.up { color: #00d4aa; }
             .price-change.down { color: #ff6666; }
@@ -139,14 +141,19 @@ async def dashboard_home():
                 font-family: monospace;
             }
             .clock-nl {
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: bold;
                 color: #00d4aa;
             }
             .clock-utc {
-                font-size: 14px;
+                font-size: 12px;
                 color: #888;
                 margin-top: 5px;
+            }
+            .loading {
+                color: #aaa;
+                font-size: 12px;
+                opacity: 0.8;
             }
             .section {
                 background: #2a2a2a;
@@ -194,17 +201,17 @@ async def dashboard_home():
                     <div class="price-card" id="price-card-sol">
                         <div class="price-header">
                             <div class="price-title">SOL (24h)</div>
-                            <div class="price-change" id="price-change-sol">--</div>
                         </div>
                         <div class="price-value" id="price-value-sol">$--</div>
+                        <div class="price-change" id="price-change-sol">--</div>
                         <div class="price-chart" id="price-chart-sol"></div>
                     </div>
                     <div class="price-card" id="price-card-skr">
                         <div class="price-header">
                             <div class="price-title">SKR (24h)</div>
-                            <div class="price-change" id="price-change-skr">--</div>
                         </div>
                         <div class="price-value" id="price-value-skr">$--</div>
+                        <div class="price-change" id="price-change-skr">--</div>
                         <div class="price-chart" id="price-chart-skr"></div>
                     </div>
                 </div>
@@ -215,7 +222,7 @@ async def dashboard_home():
             </div>
             <div class="section">
                 <h2>💰 Wallet Balances</h2>
-                <div id="balances">Loading...</div>
+                <div id="balances" class="loading">Loading...</div>
             </div>
 
             <div class="section">
@@ -384,6 +391,10 @@ async def dashboard_home():
 
             async function loadBalances() {
                 const response = await fetch("/api/balances/wallet-1");
+                if (!response.ok) {
+                    document.getElementById("balances").innerHTML = '<div class="loading">Failed to load balances</div>';
+                    return;
+                }
                 const data = await response.json();
 
                 let totalUsd = data.total_usd || 0;
