@@ -153,6 +153,15 @@ class SwapManager:
                     sol_usd_price = input_token_usd_price
                 elif request.output_token.upper() == "SOL":
                     sol_usd_price = output_token_usd_price
+                else:
+                    try:
+                        sol_mint = self.token_mints.get("SOL")
+                        if sol_mint:
+                            sol_prices = await self.jupiter.get_token_price([sol_mint])
+                            if sol_prices:
+                                sol_usd_price = sol_prices.get(sol_mint, 0)
+                    except Exception as e:
+                        logger.warning("[{}] Failed to fetch SOL USD price for fees: {}", self.account_id, e)
                 if sol_usd_price:
                     fee_usd = fee_sol * sol_usd_price
 

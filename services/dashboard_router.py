@@ -203,8 +203,8 @@ async def dashboard_home():
                 background: #333;
                 color: #00d4aa;
             }
-            .success { color: #00d4aa; }
-            .error { color: #ff4444; }
+            .success, .completed { color: #00d4aa; }
+            .error, .failed { color: #ff4444; }
             .pending { color: #ffaa00; }
         </style>
     </head>
