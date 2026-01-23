@@ -46,6 +46,7 @@ async def dashboard_home():
             h1 {
                 color: #00d4aa;
                 display: inline-block;
+                margin: 0;
             }
             .header-container {
                 display: flex;
@@ -53,6 +54,46 @@ async def dashboard_home():
                 align-items: flex-start;
                 margin-bottom: 20px;
                 gap: 20px;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                min-width: 180px;
+            }
+            .logo {
+                width: 46px;
+                height: 46px;
+                flex: 0 0 auto;
+            }
+            .logo-ring {
+                fill: none;
+                stroke: #00d4aa;
+                stroke-width: 2.5;
+            }
+            .logo-swap {
+                fill: none;
+                stroke: #66f0d2;
+                stroke-width: 2.2;
+                stroke-linecap: round;
+                stroke-linejoin: round;
+            }
+            .logo-dot {
+                fill: #0b1b17;
+                stroke: #00d4aa;
+                stroke-width: 1.5;
+            }
+            .logo-sol {
+                fill: #0f2b22;
+                stroke: #00d4aa;
+                stroke-width: 1.6;
+            }
+            .logo-sol-text {
+                fill: #00d4aa;
+                font-size: 9px;
+                font-family: Arial, sans-serif;
+                font-weight: bold;
+                letter-spacing: 0.4px;
             }
             .price-charts {
                 flex: 1;
@@ -135,7 +176,20 @@ async def dashboard_home():
     <body>
         <div class="container">
             <div class="header-container">
-                <h1>🔄 SKR Swap Dashboard</h1>
+                <div class="brand">
+                    <svg class="logo" viewBox="0 0 48 48" aria-label="SKR Swap logo" role="img">
+                        <circle class="logo-ring" cx="24" cy="24" r="21"/>
+                        <path class="logo-swap" d="M14 20h12a6 6 0 0 1 6 6v4"/>
+                        <path class="logo-swap" d="M34 28H22a6 6 0 0 1-6-6v-4"/>
+                        <polyline class="logo-swap" points="30,32 34,28 30,24"/>
+                        <polyline class="logo-swap" points="18,16 14,20 18,24"/>
+                        <circle class="logo-dot" cx="14" cy="20" r="2.4"/>
+                        <circle class="logo-dot" cx="34" cy="28" r="2.4"/>
+                        <circle class="logo-sol" cx="24" cy="24" r="7.5"/>
+                        <text class="logo-sol-text" x="24" y="27.5" text-anchor="middle">SOL</text>
+                    </svg>
+                    <h1>SKR Swap</h1>
+                </div>
                 <div class="price-charts">
                     <div class="price-card" id="price-card-sol">
                         <div class="price-header">
