@@ -411,7 +411,9 @@ async def dashboard_home():
                                     : `$${inputUsd.toFixed(2)}`;
                                 const feeDisplay = swap.fee_usd == null
                                     ? '-'
-                                    : `$${Number(swap.fee_usd).toFixed(2)}`;
+                                    : (Number(swap.fee_usd) < 0.01
+                                        ? '<$0.01'
+                                        : `$${Number(swap.fee_usd).toFixed(2)}`);
 
                                 return `
                                 <tr>
