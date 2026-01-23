@@ -228,7 +228,9 @@ async def dashboard_home():
                         </thead>
                         <tbody>
                             ${(data.balances || []).map(b => {
-                                const priceDecimals = b.token === "SOL" ? 2 : 4;
+                                const isSol = b.token === "SOL"
+                                    || b.mint === "So11111111111111111111111111111111111111112";
+                                const priceDecimals = isSol ? 2 : 4;
                                 return `
                                 <tr>
                                     <td><strong>${b.token}</strong></td>
