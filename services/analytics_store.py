@@ -59,9 +59,31 @@ class AnalyticsStore:
                     created_at TEXT NOT NULL,
                     completed_at TEXT,
                     error TEXT,
-                    meta TEXT
+                    meta TEXT,
+                    input_token_usd_price REAL,
+                    output_token_usd_price REAL,
+                    input_usd REAL,
+                    output_usd REAL
                 )
             """)
+
+            # Add USD price columns if they don't exist (migration)
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN input_token_usd_price REAL")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN output_token_usd_price REAL")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN input_usd REAL")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE swaps ADD COLUMN output_usd REAL")
+            except sqlite3.OperationalError:
+                pass
 
             # Wallet state table
             conn.execute("""
@@ -127,8 +149,10 @@ class AnalyticsStore:
         output_token: str,
         input_amount: float,
         meta: Optional[Dict[str, Any]] = None,
+        input_token_usd_price: Optional[float] = None,
+        input_usd: Optional[float] = None,
     ) -> int:
-        """Create a new swap record."""
+        """Create a new swap record with USD prices at trade time."""
         created_at = datetime.now(timezone.utc).isoformat()
         meta_dump = json.dumps(meta or {}, default=str)
 
@@ -136,10 +160,12 @@ class AnalyticsStore:
             cur = conn.execute(
                 """
                 INSERT INTO swaps (account_id, account_label, input_token, output_token,
-                                   input_amount, status, created_at, meta)
-                VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?)
+                                   input_amount, status, created_at, meta,
+                                   input_token_usd_price, input_usd)
+                VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?)
                 """,
-                (account_id, account_label, input_token, output_token, input_amount, created_at, meta_dump),
+                (account_id, account_label, input_token, output_token, input_amount,
+                 created_at, meta_dump, input_token_usd_price, input_usd),
             )
             return cur.lastrowid
 
@@ -150,8 +176,10 @@ class AnalyticsStore:
         output_amount: float,
         price: Optional[float] = None,
         slippage: Optional[float] = None,
+        output_token_usd_price: Optional[float] = None,
+        output_usd: Optional[float] = None,
     ) -> None:
-        """Mark a swap as completed."""
+        """Mark a swap as completed with USD prices at trade time."""
         completed_at = datetime.now(timezone.utc).isoformat()
 
         with self._connect() as conn:
@@ -163,10 +191,13 @@ class AnalyticsStore:
                     output_amount = ?,
                     price = ?,
                     slippage = ?,
-                    completed_at = ?
+                    completed_at = ?,
+                    output_token_usd_price = ?,
+                    output_usd = ?
                 WHERE id = ?
                 """,
-                (signature, output_amount, price, slippage, completed_at, swap_id),
+                (signature, output_amount, price, slippage, completed_at,
+                 output_token_usd_price, output_usd, swap_id),
             )
 
     def fail_swap(self, swap_id: int, error: str) -> None:

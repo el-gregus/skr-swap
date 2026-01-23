@@ -55,7 +55,19 @@ class SwapManager:
         # Convert amount to lamports
         input_lamports = to_lamports(request.amount, decimals=9)  # TODO: Get actual decimals
 
-        # Create swap record
+        # Fetch current USD prices for input/output tokens
+        input_token_usd_price = None
+        input_usd = None
+        try:
+            token_mints = [input_mint, output_mint]
+            prices = await self.jupiter.get_token_price(token_mints)
+            if prices:
+                input_token_usd_price = prices.get(input_mint, 0)
+                input_usd = request.amount * input_token_usd_price if input_token_usd_price else None
+        except Exception as e:
+            logger.warning("[{}] Failed to fetch USD prices: {}", self.account_id, e)
+
+        # Create swap record with USD prices
         swap_id = self.analytics.create_swap(
             account_id=self.account_id,
             account_label=self.account_label,
@@ -63,6 +75,8 @@ class SwapManager:
             output_token=request.output_token,
             input_amount=request.amount,
             meta={"slippage_bps": request.slippage_bps},
+            input_token_usd_price=input_token_usd_price,
+            input_usd=input_usd,
         )
 
         try:
@@ -112,13 +126,26 @@ class SwapManager:
             output_amount = format_lamports(output_lamports, decimals=9)  # TODO: Get actual decimals
             price = output_amount / request.amount if request.amount > 0 else 0
 
-            # Mark swap as completed
+            # Fetch output token USD price
+            output_token_usd_price = None
+            output_usd = None
+            try:
+                prices = await self.jupiter.get_token_price([output_mint])
+                if prices:
+                    output_token_usd_price = prices.get(output_mint, 0)
+                    output_usd = output_amount * output_token_usd_price if output_token_usd_price else None
+            except Exception as e:
+                logger.warning("[{}] Failed to fetch output USD price: {}", self.account_id, e)
+
+            # Mark swap as completed with USD prices
             self.analytics.complete_swap(
                 swap_id=swap_id,
                 signature=signature,
                 output_amount=output_amount,
                 price=price,
                 slippage=float(quote.get("priceImpactPct", 0)),
+                output_token_usd_price=output_token_usd_price,
+                output_usd=output_usd,
             )
 
             logger.info(

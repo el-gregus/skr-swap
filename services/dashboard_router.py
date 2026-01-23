@@ -296,7 +296,7 @@ async def get_swaps(
     account_id: Optional[str] = None,
     status: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Get swap history with USD values."""
+    """Get swap history with historical USD values."""
     analytics = _get_analytics(request)
 
     swaps = analytics.list_swaps(
@@ -305,49 +305,13 @@ async def get_swaps(
         limit=limit,
     )
 
-    # Get token configuration and Jupiter client
-    config = getattr(request.app.state, "config", {})
-    tokens = config.get("tokens", {})
-    jupiter = getattr(request.app.state, "jupiter", None)
-
-    # Fetch current token prices
-    prices = {}
-    if jupiter:
-        try:
-            # Collect unique token mints from swaps
-            token_mints = set()
-            for swap in swaps:
-                input_token = swap.get("input_token")
-                output_token = swap.get("output_token")
-                if input_token in tokens:
-                    token_mints.add(tokens[input_token])
-                if output_token in tokens:
-                    token_mints.add(tokens[output_token])
-
-            # Fetch prices for all unique tokens
-            if token_mints:
-                price_data = await jupiter.get_token_price(list(token_mints))
-                if price_data:
-                    prices = price_data
-        except Exception as e:
-            logger.error("Failed to fetch token prices for swaps: {}", e)
-
-    # Add USD values to each swap
+    # USD values are already stored in the database from trade time
+    # Just ensure they have default values if null
     for swap in swaps:
-        input_token = swap.get("input_token")
-        output_token = swap.get("output_token")
-        input_amount = swap.get("input_amount", 0)
-        output_amount = swap.get("output_amount", 0)
-
-        # Get prices
-        input_mint = tokens.get(input_token)
-        output_mint = tokens.get(output_token)
-        input_price = prices.get(input_mint, 0) if input_mint else 0
-        output_price = prices.get(output_mint, 0) if output_mint else 0
-
-        # Calculate USD values
-        swap["input_usd"] = input_amount * input_price
-        swap["output_usd"] = output_amount * output_price if output_amount else 0
+        if swap.get("input_usd") is None:
+            swap["input_usd"] = 0
+        if swap.get("output_usd") is None:
+            swap["output_usd"] = 0
 
     return {"swaps": swaps}
 
