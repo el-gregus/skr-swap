@@ -1,5 +1,5 @@
 """Solana RPC client wrapper."""
-from typing import Optional
+from typing import Optional, Dict, Any
 import base64
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
@@ -18,6 +18,7 @@ class SolanaClient:
         self.rpc_url = rpc_url
         self.commitment = commitment
         self.client = AsyncClient(rpc_url, commitment=Confirmed)
+        self._mint_info_cache: Dict[str, Dict[str, Any]] = {}
 
     async def close(self):
         """Close the RPC client."""
@@ -46,6 +47,7 @@ class SolanaClient:
         self,
         owner: Pubkey,
         mint: Pubkey,
+        program_id: Optional[Pubkey] = None,
     ) -> Optional[int]:
         """
         Get token balance for a wallet.
@@ -60,8 +62,14 @@ class SolanaClient:
         try:
             from solana.rpc.types import TokenAccountOpts
 
+            if program_id is None:
+                program_id = await self.get_token_program_id(mint)
+
             # Get token accounts by owner
-            opts = TokenAccountOpts(mint=mint)
+            if program_id:
+                opts = TokenAccountOpts(mint=mint, program_id=program_id)
+            else:
+                opts = TokenAccountOpts(mint=mint)
             response = await self.client.get_token_accounts_by_owner(
                 owner,
                 opts
@@ -86,6 +94,51 @@ class SolanaClient:
                         type(e).__name__,
                         traceback.format_exc())
             return None
+
+    async def get_mint_info(self, mint: Pubkey) -> Optional[Dict[str, Any]]:
+        """Get mint owner program id and decimals (cached)."""
+        mint_str = str(mint)
+        cached = self._mint_info_cache.get(mint_str)
+        if cached:
+            return cached
+
+        owner: Optional[Pubkey] = None
+        decimals: Optional[int] = None
+
+        try:
+            account_info = await self.client.get_account_info(mint)
+            if account_info.value and account_info.value.owner:
+                owner_val = account_info.value.owner
+                owner = owner_val if isinstance(owner_val, Pubkey) else Pubkey.from_string(str(owner_val))
+        except Exception as e:
+            logger.error("Failed to get mint owner: {}", e)
+
+        try:
+            supply = await self.client.get_token_supply(mint)
+            if supply.value and supply.value.decimals is not None:
+                decimals = int(supply.value.decimals)
+        except Exception as e:
+            logger.error("Failed to get mint decimals: {}", e)
+
+        if owner is None and decimals is None:
+            return None
+
+        info = {"owner": owner, "decimals": decimals}
+        self._mint_info_cache[mint_str] = info
+        return info
+
+    async def get_token_decimals(self, mint: Pubkey) -> Optional[int]:
+        """Get token decimals for a mint."""
+        info = await self.get_mint_info(mint)
+        if info and info.get("decimals") is not None:
+            return int(info["decimals"])
+        return None
+
+    async def get_token_program_id(self, mint: Pubkey) -> Optional[Pubkey]:
+        """Get the token program id that owns the mint (Token or Token-2022)."""
+        info = await self.get_mint_info(mint)
+        owner = info.get("owner") if info else None
+        return owner if isinstance(owner, Pubkey) else None
 
     async def send_transaction(
         self,

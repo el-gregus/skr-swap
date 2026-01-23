@@ -604,7 +604,11 @@ async def get_balances(
             )
             # Handle None (error) vs 0 (no balance)
             if skr_balance_raw is not None:
-                skr_balance = skr_balance_raw / 1e6
+                decimals = await solana.get_token_decimals(
+                    Pubkey.from_string(tokens["SKR"])
+                )
+                decimals = decimals if decimals is not None else 6
+                skr_balance = skr_balance_raw / (10 ** decimals)
             else:
                 skr_balance = 0
 

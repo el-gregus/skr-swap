@@ -8,6 +8,7 @@ from exchange.solana_client import SolanaClient
 from services.analytics_store import AnalyticsStore
 from utils.wallet import to_lamports, format_lamports
 from solders.keypair import Keypair
+from solders.pubkey import Pubkey
 
 
 class SwapManager:
@@ -52,8 +53,11 @@ class SwapManager:
             logger.error("[{}] {}", self.account_id, error)
             return SwapResult(success=False, input_amount=request.amount, error=error)
 
+        input_decimals = await self._get_token_decimals(request.input_token, input_mint)
+        output_decimals = await self._get_token_decimals(request.output_token, output_mint)
+
         # Convert amount to lamports
-        input_lamports = to_lamports(request.amount, decimals=9)  # TODO: Get actual decimals
+        input_lamports = to_lamports(request.amount, decimals=input_decimals)
 
         # Fetch current USD prices for input/output tokens
         input_token_usd_price = None
@@ -123,7 +127,7 @@ class SwapManager:
 
             # Calculate output amount and price
             output_lamports = int(quote.get("outAmount", 0))
-            output_amount = format_lamports(output_lamports, decimals=9)  # TODO: Get actual decimals
+            output_amount = format_lamports(output_lamports, decimals=output_decimals)
             price = output_amount / request.amount if request.amount > 0 else 0
 
             # Fetch output token USD price
@@ -179,3 +183,17 @@ class SwapManager:
                 input_amount=request.amount,
                 error=error_msg,
             )
+
+    async def _get_token_decimals(self, symbol: str, mint: str) -> int:
+        """Resolve token decimals with SOL + fallback handling."""
+        if symbol.upper() == "SOL":
+            return 9
+
+        try:
+            decimals = await self.solana.get_token_decimals(Pubkey.from_string(mint))
+            if decimals is not None:
+                return int(decimals)
+        except Exception as e:
+            logger.warning("[{}] Failed to get decimals for {}: {}", self.account_id, symbol, e)
+
+        return 6

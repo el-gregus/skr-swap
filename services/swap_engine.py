@@ -36,6 +36,19 @@ class SwapEngine:
         self.last_action: Optional[str] = None
         self.last_swap_output_amount: Optional[float] = None  # Track SOL from SELL
 
+    async def _get_token_decimals(self, mint: str, default: int = 6) -> int:
+        """Fetch token decimals with a safe fallback."""
+        if not self.solana_client:
+            return default
+        try:
+            decimals = await self.solana_client.get_token_decimals(
+                Pubkey.from_string(mint)
+            )
+            return decimals if decimals is not None else default
+        except Exception as e:
+            logger.warning("[{}] Failed to fetch decimals for {}: {}", self.account_id, mint, e)
+            return default
+
     async def process_signal(self, signal: Signal) -> None:
         """
         Process a trading signal and execute swap if conditions are met.
@@ -169,8 +182,9 @@ class SwapEngine:
                 Pubkey.from_string(skr_mint)
             )
 
-            # Convert from lamports to tokens (6 decimals for SKR)
-            skr_balance = (balance / 1e6) if balance else 0
+            decimals = await self._get_token_decimals(skr_mint, default=6)
+            # Convert from base units to tokens
+            skr_balance = (balance / (10 ** decimals)) if balance else 0
             min_threshold = self.strategy.get("min_skr_threshold", 0.1)  # Minimum SKR to consider "holding"
 
             logger.info(
@@ -247,8 +261,9 @@ class SwapEngine:
                     logger.warning("[{}] No SKR balance to sell", self.account_id)
                     return None
 
-                # Convert from lamports to tokens (6 decimals for SKR)
-                amount = balance / 1e6
+                decimals = await self._get_token_decimals(skr_mint, default=6)
+                # Convert from base units to tokens
+                amount = balance / (10 ** decimals)
                 logger.info("[{}] Using entire SKR balance: {}", self.account_id, amount)
                 return amount
 
