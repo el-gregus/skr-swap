@@ -120,6 +120,10 @@ async def dashboard_home():
         <script>
             // Format dates in Newfoundland Time (12-hour format)
             function formatNLTime(dateString) {
+                // Handle legacy timestamps without timezone info by treating them as UTC
+                if (dateString && !dateString.includes('+') && !dateString.endsWith('Z')) {
+                    dateString = dateString + 'Z';
+                }
                 return new Date(dateString).toLocaleString('en-US', {
                     timeZone: 'America/St_Johns',
                     year: 'numeric',
