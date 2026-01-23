@@ -406,8 +406,8 @@ async def dashboard_home():
                                 const inputUsd = swap.input_usd || 0;
                                 const outputUsd = swap.output_usd || 0;
                                 const usdDisplay = swap.status === 'COMPLETED'
-                                    ? `$${inputUsd.toFixed(4)} → $${outputUsd.toFixed(4)}`
-                                    : `$${inputUsd.toFixed(4)}`;
+                                    ? `$${inputUsd.toFixed(2)} → $${outputUsd.toFixed(2)}`
+                                    : `$${inputUsd.toFixed(2)}`;
 
                                 return `
                                 <tr>
