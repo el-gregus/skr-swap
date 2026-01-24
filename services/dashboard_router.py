@@ -430,7 +430,7 @@ async def dashboard_home():
                                 <th>Amount</th>
                                 <th>USD Value</th>
                                 <th>Fee (USD)</th>
-                                <th>Δ vs Prev</th>
+                                <th>Change</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -449,12 +449,16 @@ async def dashboard_home():
                                 const prev = data.swaps[index + 1];
                                 let changeDisplay = '-';
                                 let changeClass = 'change-flat';
-                                if (prev && swap.price != null && prev.price) {
-                                    const changePct = ((swap.price - prev.price) / prev.price) * 100;
-                                    const sign = changePct > 0 ? '+' : '';
-                                    changeDisplay = `${sign}${changePct.toFixed(2)}%`;
-                                    if (changePct > 0) changeClass = 'change-up';
-                                    else if (changePct < 0) changeClass = 'change-down';
+                                if (prev && swap.output_amount != null && prev.output_amount != null) {
+                                    const currentOut = Number(swap.output_amount);
+                                    const prevOut = Number(prev.output_amount);
+                                    if (prevOut !== 0) {
+                                        const changePct = ((currentOut - prevOut) / prevOut) * 100;
+                                        const sign = changePct > 0 ? '+' : '';
+                                        changeDisplay = `${sign}${changePct.toFixed(2)}%`;
+                                        if (changePct > 0) changeClass = 'change-up';
+                                        else if (changePct < 0) changeClass = 'change-down';
+                                    }
                                 }
 
                                 return `
