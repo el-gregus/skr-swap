@@ -336,7 +336,7 @@ async def dashboard_home():
 
                 const points = prices.map((p, i) => {
                     const x = (i / (prices.length - 1)) * (width - 4) + 2;
-                    const y = height - ((p.price - min) / range) * (height - 10) - 5;
+                    const y = height - ((p.price - min) / range) * (height - 4) - 2;
                     const above = p.price >= mean;
                     return { x, y, above };
                 });
