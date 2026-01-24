@@ -255,6 +255,59 @@ class AnalyticsStore:
             cur = conn.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
+    def get_output_change_totals(
+        self,
+        since_iso: str,
+        account_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, float]]:
+        """
+        Get percent change per output token since a timestamp.
+
+        Returns dict of {token: {first, last, change_pct}}.
+        """
+        query = """
+            SELECT output_token, output_amount, created_at
+            FROM swaps
+            WHERE status = 'COMPLETED'
+              AND created_at >= ?
+        """
+        params: List[Any] = [since_iso]
+
+        if account_id:
+            query += " AND account_id = ?"
+            params.append(account_id)
+
+        query += " ORDER BY created_at ASC"
+
+        first: Dict[str, float] = {}
+        last: Dict[str, float] = {}
+
+        with self._connect() as conn:
+            cur = conn.execute(query, params)
+            for row in cur.fetchall():
+                token = row["output_token"]
+                amount = row["output_amount"]
+                if amount is None:
+                    continue
+                amount_val = float(amount)
+                if token not in first:
+                    first[token] = amount_val
+                last[token] = amount_val
+
+        totals: Dict[str, Dict[str, float]] = {}
+        for token, first_val in first.items():
+            last_val = last.get(token)
+            if last_val is None or first_val == 0:
+                continue
+            change_pct = ((last_val - first_val) / first_val) * 100
+            totals[token] = {
+                "first": first_val,
+                "last": last_val,
+                "change_pct": change_pct,
+            }
+
+        return totals
+
     def get_previous_completed_swap(
         self,
         account_id: str,

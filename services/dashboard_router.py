@@ -1,5 +1,7 @@
 """Dashboard API endpoints for SKR Swap."""
 from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from loguru import logger
@@ -192,6 +194,11 @@ async def dashboard_home():
                 padding: 4px 8px;
                 font-size: 12px;
             }
+            .swaps-totals {
+                margin-top: 6px;
+                color: #aaa;
+                font-size: 12px;
+            }
             .total-value {
                 font-size: 14px;
                 font-weight: 600;
@@ -289,6 +296,7 @@ async def dashboard_home():
                         </select>
                     </div>
                 </div>
+                <div id="swaps-totals" class="swaps-totals">Totals since Jan 23, 2026 10:09 PM NST: --</div>
                 <div id="swaps">Loading...</div>
             </div>
 
@@ -494,6 +502,22 @@ async def dashboard_home():
                     </table>
                 `;
                 document.getElementById('swaps').innerHTML = html;
+
+                const totalsEl = document.getElementById('swaps-totals');
+                if (totalsEl) {
+                    const totals = data.totals || {};
+                    const parts = Object.keys(totals).sort().map(token => {
+                        const pct = totals[token].change_pct;
+                        if (pct === undefined || pct === null) {
+                            return `${token}: -`;
+                        }
+                        const sign = pct > 0 ? '+' : '';
+                        return `${token}: ${sign}${pct.toFixed(2)}%`;
+                    });
+                    totalsEl.textContent = parts.length
+                        ? `Totals since Jan 23, 2026 10:09 PM NST: ${parts.join(' | ')}`
+                        : 'Totals since Jan 23, 2026 10:09 PM NST: -';
+                }
             }
 
             async function loadBalances() {
@@ -656,8 +680,12 @@ async def get_swaps(
                 prev_out = float(prev["output_amount"])
                 if prev_out != 0:
                     swap["change_pct"] = ((float(swap["output_amount"]) - prev_out) / prev_out) * 100
+    # Totals since Jan 23, 2026 10:09 PM NST (America/St_Johns)
+    start_local = datetime(2026, 1, 23, 22, 9, tzinfo=ZoneInfo("America/St_Johns"))
+    start_iso = start_local.astimezone(timezone.utc).isoformat()
+    totals = analytics.get_output_change_totals(since_iso=start_iso, account_id=account_id)
 
-    return {"swaps": swaps}
+    return {"swaps": swaps, "totals": totals}
 
 
 @router.get("/api/signals")
