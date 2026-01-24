@@ -354,6 +354,9 @@ async def dashboard_home():
             updateClocks();
             setInterval(updateClocks, 1000);
 
+            let lastBalancesHtml = null;
+            let lastBalancesTotal = null;
+
             function renderSparkline(prices, width = 220, height = 86) {
                 if (!prices || prices.length < 2) {
                     return '<div style="color:#666;font-size:12px;">No data yet</div>';
@@ -522,17 +525,24 @@ async def dashboard_home():
 
             async function loadBalances() {
                 const balancesEl = document.getElementById("balances");
-                const response = await fetch("/api/balances/wallet-1");
-                if (!response.ok) {
-                    balancesEl.innerHTML = '<div class="loading">Failed to load balances</div>';
-                    return;
-                }
-                const data = await response.json();
+                try {
+                    const response = await fetch("/api/balances/wallet-1");
+                    if (!response.ok) {
+                        if (lastBalancesHtml) {
+                            balancesEl.innerHTML = lastBalancesHtml;
+                            balancesEl.classList.add("loading");
+                        } else {
+                            balancesEl.innerHTML = '<div class="loading">Failed to load balances</div>';
+                        }
+                        return;
+                    }
+                    const data = await response.json();
 
-                let totalUsd = data.total_usd || 0;
-                document.getElementById("balances-total").textContent = `Total Value: $${totalUsd.toFixed(2)} USD`;
-                balancesEl.classList.remove("loading");
-                const html = `
+                    let totalUsd = data.total_usd || 0;
+                    lastBalancesTotal = totalUsd;
+                    document.getElementById("balances-total").textContent = `Total Value: $${totalUsd.toFixed(2)} USD`;
+                    balancesEl.classList.remove("loading");
+                    const html = `
                     <table>
                         <thead>
                             <tr>
@@ -559,7 +569,16 @@ async def dashboard_home():
                         </tbody>
                     </table>
                 `;
-                balancesEl.innerHTML = html;
+                    balancesEl.innerHTML = html;
+                    lastBalancesHtml = html;
+                } catch (error) {
+                    if (lastBalancesHtml) {
+                        balancesEl.innerHTML = lastBalancesHtml;
+                        balancesEl.classList.add("loading");
+                    } else {
+                        balancesEl.innerHTML = '<div class="loading">Failed to load balances</div>';
+                    }
+                }
             }
 
             async function loadSignals() {
