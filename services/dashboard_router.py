@@ -447,10 +447,16 @@ async def dashboard_home():
                                         ? '<$0.01'
                                         : `$${Number(swap.fee_usd).toFixed(2)}`);
                                 const prev = data.swaps.slice(index + 1)
-                                    .find(s => s.output_token === swap.output_token && s.output_amount != null);
+                                    .find(s => s.status === 'COMPLETED'
+                                        && s.output_token === swap.output_token
+                                        && s.output_amount != null
+                                        && Number(s.output_amount) > 0);
                                 let changeDisplay = '-';
                                 let changeClass = 'change-flat';
-                                if (prev && swap.output_amount != null && prev.output_amount != null) {
+                                if (swap.status === 'COMPLETED'
+                                    && prev
+                                    && swap.output_amount != null
+                                    && prev.output_amount != null) {
                                     const currentOut = Number(swap.output_amount);
                                     const prevOut = Number(prev.output_amount);
                                     if (prevOut !== 0) {
