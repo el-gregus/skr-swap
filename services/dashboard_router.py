@@ -331,17 +331,44 @@ async def dashboard_home():
                 const values = prices.map(p => p.price);
                 const min = Math.min(...values);
                 const max = Math.max(...values);
+                const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
                 const range = max - min || 1;
 
                 const points = prices.map((p, i) => {
                     const x = (i / (prices.length - 1)) * (width - 4) + 2;
                     const y = height - ((p.price - min) / range) * (height - 10) - 5;
-                    return `${x.toFixed(2)},${y.toFixed(2)}`;
-                }).join(" ");
+                    const above = p.price >= mean;
+                    return { x, y, above };
+                });
+
+                const segments = [];
+                let current = [points[0]];
+                let currentAbove = points[0].above;
+
+                for (let i = 1; i < points.length; i++) {
+                    const point = points[i];
+                    if (point.above === currentAbove) {
+                        current.push(point);
+                    } else {
+                        // start a new segment including the last point for continuity
+                        segments.push({ above: currentAbove, points: current });
+                        current = [points[i - 1], point];
+                        currentAbove = point.above;
+                    }
+                }
+                segments.push({ above: currentAbove, points: current });
+
+                const polylines = segments.map(seg => {
+                    const stroke = seg.above ? "#00d4aa" : "#ff6666";
+                    const segPoints = seg.points
+                        .map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`)
+                        .join(" ");
+                    return `<polyline points="${segPoints}" fill="none" stroke="${stroke}" stroke-width="2" />`;
+                }).join("");
 
                 return `
                     <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%">
-                        <polyline points="${points}" fill="none" stroke="#00d4aa" stroke-width="2" />
+                        ${polylines}
                     </svg>
                 `;
             }
