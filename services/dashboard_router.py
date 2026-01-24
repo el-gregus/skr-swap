@@ -184,6 +184,14 @@ async def dashboard_home():
             .section-header h2 {
                 margin: 0;
             }
+            .swaps-controls select {
+                background: #1f1f1f;
+                color: #fff;
+                border: 1px solid #444;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 12px;
+            }
             .total-value {
                 font-size: 14px;
                 font-weight: 600;
@@ -269,7 +277,18 @@ async def dashboard_home():
             </div>
 
             <div class="section">
-                <h2>Recent Swaps</h2>
+                <div class="section-header">
+                    <h2>Recent Swaps</h2>
+                    <div class="swaps-controls">
+                        <label for="swaps-limit" style="color:#aaa;font-size:12px;margin-right:6px;">Show</label>
+                        <select id="swaps-limit">
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="swaps">Loading...</div>
             </div>
 
@@ -417,7 +436,9 @@ async def dashboard_home():
             }
 
             async function loadSwaps() {
-                const response = await fetch('/api/swaps?limit=10');
+                const limitEl = document.getElementById('swaps-limit');
+                const limit = limitEl ? limitEl.value : 10;
+                const response = await fetch(`/api/swaps?limit=${limit}`);
                 const data = await response.json();
 
                 const html = `
@@ -446,26 +467,14 @@ async def dashboard_home():
                                     : (Number(swap.fee_usd) < 0.01
                                         ? '<$0.01'
                                         : `$${Number(swap.fee_usd).toFixed(2)}`);
-                                const prev = data.swaps.slice(index + 1)
-                                    .find(s => s.status === 'COMPLETED'
-                                        && s.output_token === swap.output_token
-                                        && s.output_amount != null
-                                        && Number(s.output_amount) > 0);
                                 let changeDisplay = '-';
                                 let changeClass = 'change-flat';
-                                if (swap.status === 'COMPLETED'
-                                    && prev
-                                    && swap.output_amount != null
-                                    && prev.output_amount != null) {
-                                    const currentOut = Number(swap.output_amount);
-                                    const prevOut = Number(prev.output_amount);
-                                    if (prevOut !== 0) {
-                                        const changePct = ((currentOut - prevOut) / prevOut) * 100;
-                                        const sign = changePct > 0 ? '+' : '';
-                                        changeDisplay = `${sign}${changePct.toFixed(2)}%`;
-                                        if (changePct > 0) changeClass = 'change-up';
-                                        else if (changePct < 0) changeClass = 'change-down';
-                                    }
+                                if (swap.change_pct != null) {
+                                    const changePct = Number(swap.change_pct);
+                                    const sign = changePct > 0 ? '+' : '';
+                                    changeDisplay = `${sign}${changePct.toFixed(2)}%`;
+                                    if (changePct > 0) changeClass = 'change-up';
+                                    else if (changePct < 0) changeClass = 'change-down';
                                 }
 
                                 return `
@@ -573,6 +582,11 @@ async def dashboard_home():
                 loadBalances();
                 loadPriceCharts();
             }, 5000);
+
+            const swapsLimit = document.getElementById('swaps-limit');
+            if (swapsLimit) {
+                swapsLimit.addEventListener('change', () => loadSwaps());
+            }
         </script>
     </body>
     </html>
@@ -611,7 +625,7 @@ async def get_price_history(
 @router.get("/api/swaps")
 async def get_swaps(
     request: Request,
-    limit: int = 100,
+    limit: int = 10,
     account_id: Optional[str] = None,
     status: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -631,6 +645,17 @@ async def get_swaps(
             swap["input_usd"] = 0
         if swap.get("output_usd") is None:
             swap["output_usd"] = 0
+        swap["change_pct"] = None
+        if swap.get("status") == "COMPLETED" and swap.get("output_amount"):
+            prev = analytics.get_previous_completed_swap(
+                account_id=swap["account_id"],
+                output_token=swap["output_token"],
+                before_created_at=swap["created_at"],
+            )
+            if prev and prev.get("output_amount"):
+                prev_out = float(prev["output_amount"])
+                if prev_out != 0:
+                    swap["change_pct"] = ((float(swap["output_amount"]) - prev_out) / prev_out) * 100
 
     return {"swaps": swaps}
 

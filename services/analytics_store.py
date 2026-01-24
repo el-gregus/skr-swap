@@ -255,6 +255,30 @@ class AnalyticsStore:
             cur = conn.execute(query, params)
             return [dict(row) for row in cur.fetchall()]
 
+    def get_previous_completed_swap(
+        self,
+        account_id: str,
+        output_token: str,
+        before_created_at: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Get the most recent completed swap before a timestamp for an output token."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT *
+                FROM swaps
+                WHERE account_id = ?
+                  AND status = 'COMPLETED'
+                  AND output_token = ?
+                  AND created_at < ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (account_id, output_token, before_created_at),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
     def get_last_completed_swap(
         self,
         account_id: str,
