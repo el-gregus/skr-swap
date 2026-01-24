@@ -207,6 +207,9 @@ async def dashboard_home():
             .success, .completed { color: #00d4aa; }
             .error, .failed { color: #ff4444; }
             .pending { color: #ffaa00; }
+            .change-up { color: #00d4aa; }
+            .change-down { color: #ff6666; }
+            .change-flat { color: #aaa; }
         </style>
     </head>
     <body>
@@ -427,11 +430,12 @@ async def dashboard_home():
                                 <th>Amount</th>
                                 <th>USD Value</th>
                                 <th>Fee (USD)</th>
+                                <th>Δ vs Prev</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.swaps.map(swap => {
+                            ${data.swaps.map((swap, index) => {
                                 const inputUsd = swap.input_usd || 0;
                                 const outputUsd = swap.output_usd || 0;
                                 const usdDisplay = swap.status === 'COMPLETED'
@@ -442,6 +446,16 @@ async def dashboard_home():
                                     : (Number(swap.fee_usd) < 0.01
                                         ? '<$0.01'
                                         : `$${Number(swap.fee_usd).toFixed(2)}`);
+                                const prev = data.swaps[index + 1];
+                                let changeDisplay = '-';
+                                let changeClass = 'change-flat';
+                                if (prev && swap.price != null && prev.price) {
+                                    const changePct = ((swap.price - prev.price) / prev.price) * 100;
+                                    const sign = changePct > 0 ? '+' : '';
+                                    changeDisplay = `${sign}${changePct.toFixed(2)}%`;
+                                    if (changePct > 0) changeClass = 'change-up';
+                                    else if (changePct < 0) changeClass = 'change-down';
+                                }
 
                                 return `
                                 <tr>
@@ -451,6 +465,7 @@ async def dashboard_home():
                                     <td>${swap.input_amount.toFixed(4)} → ${(swap.output_amount || 0).toFixed(4)}</td>
                                     <td>${usdDisplay}</td>
                                     <td>${feeDisplay}</td>
+                                    <td class="${changeClass}">${changeDisplay}</td>
                                     <td class="${swap.status.toLowerCase()}">${swap.status}</td>
                                 </tr>
                                 `;
