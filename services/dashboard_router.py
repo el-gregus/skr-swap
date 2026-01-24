@@ -111,7 +111,7 @@ async def dashboard_home():
             }
             .price-body {
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 12px;
             }
             .price-meta {
@@ -123,7 +123,7 @@ async def dashboard_home():
                 display: flex;
                 justify-content: space-between;
                 align-items: baseline;
-                margin-bottom: 6px;
+                margin-bottom: 4px;
             }
             .price-title {
                 font-size: 12px;
@@ -144,7 +144,8 @@ async def dashboard_home():
             .price-change.down { color: #ff6666; }
             .price-chart {
                 width: 100%;
-                height: 44px;
+                height: 56px;
+                margin-top: -2px;
             }
             .clock-container {
                 text-align: right;
@@ -323,7 +324,7 @@ async def dashboard_home():
             updateClocks();
             setInterval(updateClocks, 1000);
 
-            function renderSparkline(prices, width = 220, height = 44) {
+            function renderSparkline(prices, width = 220, height = 56) {
                 if (!prices || prices.length < 2) {
                     return '<div style="color:#666;font-size:12px;">No data yet</div>';
                 }
@@ -336,7 +337,7 @@ async def dashboard_home():
 
                 const points = prices.map((p, i) => {
                     const x = (i / (prices.length - 1)) * (width - 4) + 2;
-                    const y = height - ((p.price - min) / range) * (height - 4) - 2;
+                    const y = height - ((p.price - min) / range) * height;
                     const above = p.price >= mean;
                     return { x, y, above };
                 });
