@@ -416,16 +416,6 @@ class SwapEngine:
             logger.warning("[{}] Invalid signal action: {}", self.account_id, signal.action)
             return False
 
-        # Prevent consecutive duplicate actions
-        if self.last_action is not None and signal.action == self.last_action:
-            logger.warning(
-                "[{}] Rejecting consecutive {} signal (last action was {})",
-                self.account_id,
-                signal.action,
-                self.last_action
-            )
-            return False
-
         return True
 
     def _check_cooldown(self, symbol: str) -> bool:
