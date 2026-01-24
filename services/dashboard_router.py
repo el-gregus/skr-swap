@@ -144,8 +144,8 @@ async def dashboard_home():
             .price-change.down { color: #ff6666; }
             .price-chart {
                 width: 100%;
-                height: 72px;
-                margin-top: -10px;
+                height: 86px;
+                margin-top: -16px;
             }
             .clock-container {
                 text-align: right;
@@ -324,7 +324,7 @@ async def dashboard_home():
             updateClocks();
             setInterval(updateClocks, 1000);
 
-            function renderSparkline(prices, width = 220, height = 72) {
+            function renderSparkline(prices, width = 220, height = 86) {
                 if (!prices || prices.length < 2) {
                     return '<div style="color:#666;font-size:12px;">No data yet</div>';
                 }
