@@ -446,7 +446,8 @@ async def dashboard_home():
                                     : (Number(swap.fee_usd) < 0.01
                                         ? '<$0.01'
                                         : `$${Number(swap.fee_usd).toFixed(2)}`);
-                                const prev = data.swaps[index + 1];
+                                const prev = data.swaps.slice(index + 1)
+                                    .find(s => s.output_token === swap.output_token && s.output_amount != null);
                                 let changeDisplay = '-';
                                 let changeClass = 'change-flat';
                                 if (prev && swap.output_amount != null && prev.output_amount != null) {
