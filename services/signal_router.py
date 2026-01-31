@@ -27,7 +27,11 @@ class SignalRouter:
     def _should_execute_sequence(self, account_id: str, signal: Signal) -> bool:
         signal_type = signal.metadata.get("signal_type")
         if not signal_type:
-            return True
+            logger.info(
+                "[{}] Missing signal_type metadata; ignoring legacy signal",
+                account_id,
+            )
+            return False
 
         signal_type = self._normalize_signal_type(signal_type)
         key = (account_id, signal.symbol)

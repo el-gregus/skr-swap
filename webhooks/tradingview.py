@@ -10,20 +10,27 @@ router = APIRouter()
 
 def parse_signal_name(signal_name: str) -> Dict[str, Any]:
     """
-    Parse signal name format: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME
-    Example: BUY|MR-Low|5m|SKR-USDC|2026-01-31T12:00:00Z
+    Parse signal name format: SYMBOL,TIMEFRAME,Gregus,TYPE,ACTION,SIGNALTIME,PRICE
+    Example: SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
     """
-    parts = [p.strip() for p in signal_name.split("|")]
-    if len(parts) < 5:
-        raise ValueError("Signal name must have 5 parts: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME")
+    parts = [p.strip() for p in signal_name.split(",")]
+    if len(parts) < 7:
+        raise ValueError(
+            "Signal name must have 7 parts: SYMBOL,TIMEFRAME,Gregus,TYPE,ACTION,SIGNALTIME,PRICE"
+        )
 
-    action, signal_type, timeframe, symbol, signal_time = parts[:5]
+    symbol, timeframe, source, signal_type, action, signal_time, price = parts[:7]
+    if source != "Gregus":
+        raise ValueError("Signal source must be 'Gregus'")
+
     return {
         "action": action.upper(),
         "signal_type": signal_type,
         "timeframe": timeframe,
         "symbol": symbol,
         "signal_time": signal_time,
+        "price": price,
+        "signal_source": source,
     }
 
 
@@ -32,8 +39,8 @@ def parse_webhook_payload(body: bytes, content_type: Optional[str]) -> Dict[str,
     Parse webhook payload from TradingView.
 
     Supports:
-    - JSON format: {"action": "BUY", "symbol": "SKR-USDC", "amount": 10.0}
-    - CSV format: action=BUY,symbol=SKR-USDC,amount=10.0
+    - JSON format: {"signal": "SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321"}
+    - CSV format: signal=SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
     """
     try:
         # Try JSON first
@@ -44,12 +51,27 @@ def parse_webhook_payload(body: bytes, content_type: Optional[str]) -> Dict[str,
         # Try CSV format
         text = body.decode("utf-8").strip()
         if "=" in text and "," in text:
-            pairs = [p.strip() for p in text.split(",")]
-            result = {}
-            for pair in pairs:
-                if "=" in pair:
-                    key, value = pair.split("=", 1)
-                    result[key.strip()] = value.strip()
+            tokens = [p.strip() for p in text.split(",")]
+            result: Dict[str, Any] = {}
+            idx = 0
+            while idx < len(tokens):
+                token = tokens[idx]
+                if "=" not in token:
+                    idx += 1
+                    continue
+                key, value = token.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if key == "signal":
+                    signal_parts = [value]
+                    idx += 1
+                    while idx < len(tokens) and "=" not in tokens[idx]:
+                        signal_parts.append(tokens[idx])
+                        idx += 1
+                    result["signal"] = ",".join(signal_parts)
+                    continue
+                result[key] = value
+                idx += 1
             return result
 
         # Default: try as JSON
@@ -71,9 +93,8 @@ async def webhook(request: Request) -> Dict[str, Any]:
 
     Expected payload:
     {
-        "action": "BUY" or "SELL",
-        "symbol": "SKR-USDC",
-        "amount": 1.0  (optional),
+        "signal": "SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321",
+        "amount": 10.0  (optional),
         "note": "some note"  (optional)
     }
     """
@@ -88,23 +109,32 @@ async def webhook(request: Request) -> Dict[str, Any]:
     symbol = payload.get("symbol")
     signal_meta: Dict[str, Any] = {}
 
-    # Support signal name pattern: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME
+    # Support signal name pattern: SYMBOL,TIMEFRAME,Gregus,TYPE,ACTION,SIGNALTIME,PRICE
     signal_name = payload.get("signal") or payload.get("signal_name") or payload.get("alert_name")
-    if signal_name:
-        try:
-            parsed = parse_signal_name(str(signal_name))
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid signal name: {e}"
-            )
-        action = parsed["action"]
-        symbol = parsed["symbol"]
-        signal_meta.update({
-            "signal_type": parsed["signal_type"],
-            "timeframe": parsed["timeframe"],
-            "signal_time": parsed["signal_time"],
-        })
+    if not signal_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing required field: signal"
+        )
+
+    try:
+        parsed = parse_signal_name(str(signal_name))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid signal name: {e}"
+        )
+    action = parsed["action"]
+    symbol = parsed["symbol"]
+    signal_meta.update({
+        "signal_type": parsed["signal_type"],
+        "timeframe": parsed["timeframe"],
+        "signal_time": parsed["signal_time"],
+        "signal_source": parsed["signal_source"],
+    })
+
+    if "price" not in payload and parsed.get("price") is not None:
+        payload["price"] = parsed["price"]
 
     # Validate required fields
     if action not in ("BUY", "SELL"):
