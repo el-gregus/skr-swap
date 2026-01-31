@@ -44,7 +44,27 @@ class SignalRouter:
                     account_id,
                     signal.symbol,
                 )
-            self.sequence_state[key] = {"stage": "mr_low", "action": signal.action}
+                self.sequence_state[key] = {"stage": "mr_low", "action": signal.action}
+            elif state and state.get("action") == signal.action:
+                if state.get("stage") == "mean":
+                    logger.info(
+                        "[{}] MR-Low received; sequence already armed for {}",
+                        account_id,
+                        signal.action,
+                    )
+                else:
+                    logger.info(
+                        "[{}] MR-Low received; starting sequence for {}",
+                        account_id,
+                        signal.action,
+                    )
+                # Keep existing stage (do not downgrade mean)
+                self.sequence_state[key] = {
+                    "stage": state.get("stage", "mr_low"),
+                    "action": signal.action,
+                }
+            else:
+                self.sequence_state[key] = {"stage": "mr_low", "action": signal.action}
             logger.info(
                 "[{}] MR-Low received; waiting for Mean ({})",
                 account_id,
@@ -53,7 +73,7 @@ class SignalRouter:
             return False
 
         if signal_type == "mean":
-            if not state or state.get("stage") != "mr_low" or state.get("action") != signal.action:
+            if not state or state.get("action") != signal.action:
                 logger.info(
                     "[{}] Mean ignored; no MR-Low sequence for {} {}",
                     account_id,
