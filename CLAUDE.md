@@ -28,18 +28,18 @@ uvicorn main:app --host 0.0.0.0 --port 4201 --reload
 ```bash
 # Test JSON webhook
 curl -X POST http://localhost:4201/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"signal":"SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321","amount":10.0}'
+  -H "Content-Type: text/plain" \
+  --data-raw "SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321"
 
 # Test CSV payload (TradingView style)
 curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "signal=SKR-USDC,1m,Gregus,MR-Low,SELL,2026-01-31T12:00:00Z,0.0321,amount=10.0"
+  --data-raw "signal=SKR,1m,Gregus,MR-Low,SELL,2026-01-31T12:00:00Z,0.0321,amount=10.0"
 
 # Test indicator format
 curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "signal=SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321,amount=10.0"
+  --data-raw "signal=SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321,amount=10.0"
 ```
 
 ### Systemd Deployment

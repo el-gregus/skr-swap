@@ -11,7 +11,7 @@ router = APIRouter()
 def parse_signal_name(signal_name: str) -> Dict[str, Any]:
     """
     Parse signal name format: SYMBOL,TIMEFRAME,Gregus,TYPE,ACTION,SIGNALTIME,PRICE
-    Example: SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
+    Example: SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
     """
     parts = [p.strip() for p in signal_name.split(",")]
     if len(parts) < 7:
@@ -39,8 +39,9 @@ def parse_webhook_payload(body: bytes, content_type: Optional[str]) -> Dict[str,
     Parse webhook payload from TradingView.
 
     Supports:
-    - JSON format: {"signal": "SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321"}
-    - CSV format: signal=SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
+    - Raw text format: SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
+    - JSON format: {"signal": "SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321"}
+    - CSV format: signal=SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321
     """
     try:
         # Try JSON first
@@ -74,6 +75,10 @@ def parse_webhook_payload(body: bytes, content_type: Optional[str]) -> Dict[str,
                 idx += 1
             return result
 
+        # Raw signal string (no key=value pairs)
+        if "," in text:
+            return {"signal": text}
+
         # Default: try as JSON
         import json
         return json.loads(text)
@@ -93,7 +98,7 @@ async def webhook(request: Request) -> Dict[str, Any]:
 
     Expected payload:
     {
-        "signal": "SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321",
+        "signal": "SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321",
         "amount": 10.0  (optional),
         "note": "some note"  (optional)
     }

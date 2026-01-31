@@ -56,15 +56,15 @@ Key settings:
 ### Send a Swap Signal
 
 ```bash
-# JSON format
-curl -X POST http://localhost:4201/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"signal":"SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321","amount":10.0}'
-
-# CSV format (TradingView compatible)
+# Raw text format
 curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "signal=SKR-USDC,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321,amount=10.0"
+  --data-raw "SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321"
+
+# CSV format with amount override (TradingView compatible)
+curl -X POST http://localhost:4201/webhook \
+  -H "Content-Type: text/plain" \
+  --data-raw "signal=SKR,1m,Gregus,MR-Low,BUY,2026-01-31T12:00:00Z,0.0321,amount=10.0"
 ```
 
 ### View Dashboard
