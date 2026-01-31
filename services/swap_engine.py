@@ -36,14 +36,13 @@ class SwapEngine:
         self.last_action: Optional[str] = None
         self.last_swap_output_amount: Optional[float] = None  # Track base token from SELL
 
-    async def _get_token_decimals(self, mint: str, default: int = 6) -> int:
+    async def _get_token_decimals(self, mint: Any, default: int = 6) -> int:
         """Fetch token decimals with a safe fallback."""
         if not self.solana_client:
             return default
         try:
-            decimals = await self.solana_client.get_token_decimals(
-                Pubkey.from_string(mint)
-            )
+            mint_pubkey = mint if isinstance(mint, Pubkey) else Pubkey.from_string(str(mint))
+            decimals = await self.solana_client.get_token_decimals(mint_pubkey)
             return decimals if decimals is not None else default
         except Exception as e:
             logger.warning("[{}] Failed to fetch decimals for {}: {}", self.account_id, mint, e)
@@ -347,7 +346,7 @@ class SwapEngine:
                     logger.warning("[{}] Failed to get {} balance", self.account_id, base_token)
                     return target_amount
 
-                decimals = await self._get_token_decimals(Pubkey.from_string(base_mint), default=6)
+                decimals = await self._get_token_decimals(base_mint, default=6)
                 base_balance_tokens = base_balance / (10 ** decimals)
                 min_reserve = self.strategy.get("min_base_reserve", 0)
                 available_base = base_balance_tokens - min_reserve

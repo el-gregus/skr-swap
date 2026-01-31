@@ -115,7 +115,22 @@ class JupiterClient:
             return swap_data
 
         except httpx.HTTPError as e:
-            logger.error("Failed to get swap transaction: {}", e)
+            response_text = None
+            status_code = None
+            if isinstance(e, httpx.HTTPStatusError) and e.response is not None:
+                status_code = e.response.status_code
+                try:
+                    response_text = e.response.text
+                except Exception:
+                    response_text = None
+            if response_text:
+                logger.error(
+                    "Failed to get swap transaction: HTTP {} - {}",
+                    status_code or "error",
+                    response_text[:500],
+                )
+            else:
+                logger.error("Failed to get swap transaction: {}", e)
             return None
         except Exception as e:
             logger.error("Unexpected error getting swap transaction: {}", e)
