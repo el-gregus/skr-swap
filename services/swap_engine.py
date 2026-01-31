@@ -233,7 +233,7 @@ class SwapEngine:
         Get the amount to swap based on action.
 
         For SELL: Use entire SKR balance
-        For BUY: Use base token amount from previous SELL, or default
+        For BUY: Use entire base token balance
 
         Args:
             action: BUY or SELL
@@ -244,37 +244,10 @@ class SwapEngine:
         """
         if action == "SELL":
             if signal_amount is not None:
-                # Use explicit amount from signal if provided
-                if not self.solana_client or not self.keypair:
-                    logger.warning("[{}] Cannot verify balance for SELL amount, using signal amount", self.account_id)
-                    return signal_amount
-
-                skr_mint = self.token_config.get("SKR")
-                if not skr_mint:
-                    logger.warning("[{}] SKR mint not configured, using signal amount", self.account_id)
-                    return signal_amount
-
-                try:
-                    balance = await self.solana_client.get_token_balance(
-                        Pubkey.from_string(str(self.keypair.pubkey())),
-                        Pubkey.from_string(skr_mint)
-                    )
-                    if balance is None:
-                        return signal_amount
-                    decimals = await self._get_token_decimals(skr_mint, default=6)
-                    available = balance / (10 ** decimals)
-                    if signal_amount > available:
-                        logger.warning(
-                            "[{}] Requested SELL amount {} exceeds balance {}, reducing to balance",
-                            self.account_id,
-                            signal_amount,
-                            available
-                        )
-                        return available
-                    return signal_amount
-                except Exception as e:
-                    logger.error("[{}] Failed to validate SELL amount: {}", self.account_id, e)
-                    return signal_amount
+                logger.info(
+                    "[{}] Ignoring signal amount for SELL; using full SKR balance",
+                    self.account_id
+                )
 
             # Use entire SKR balance
             if not self.solana_client or not self.keypair:
@@ -308,58 +281,10 @@ class SwapEngine:
 
         elif action == "BUY":
             if signal_amount is not None:
-                target_amount = signal_amount
                 logger.info(
-                    "[{}] Using signal amount for BUY: {}",
-                    self.account_id,
-                    target_amount
+                    "[{}] Ignoring signal amount for BUY; using full base token balance",
+                    self.account_id
                 )
-            else:
-                # Determine target swap amount
-                if self.last_swap_output_amount is not None:
-                    target_amount = self.last_swap_output_amount
-                    logger.info(
-                        "[{}] Using saved base token amount from last SELL: {}",
-                        self.account_id,
-                        target_amount
-                    )
-                else:
-                    # Try to load last SELL output from analytics history
-                    try:
-                        base_token = self.strategy.get("base_token", "SOL")
-                        quote_token = self.strategy.get("quote_token", "SKR")
-                        last_swap = self.analytics.get_last_completed_swap(
-                            account_id=self.account_id,
-                            input_token=quote_token,
-                            output_token=base_token,
-                        )
-                        if last_swap and last_swap.get("output_amount") is not None:
-                            self.last_swap_output_amount = float(last_swap["output_amount"])
-                            target_amount = self.last_swap_output_amount
-                            logger.info(
-                                "[{}] Loaded last SELL output from history: {}",
-                                self.account_id,
-                                target_amount
-                            )
-                        else:
-                            target_amount = self.strategy.get("default_swap_size", 0.1)
-                            logger.info(
-                                "[{}] No previous SELL amount, using default: {}",
-                                self.account_id,
-                                target_amount
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            "[{}] Failed to load last SELL amount from history: {}",
-                            self.account_id,
-                            e
-                        )
-                        target_amount = self.strategy.get("default_swap_size", 0.1)
-                        logger.info(
-                            "[{}] No previous SELL amount, using default: {}",
-                            self.account_id,
-                            target_amount
-                        )
 
             base_token = self.strategy.get("base_token", "SOL")
 
@@ -396,17 +321,12 @@ class SwapEngine:
                         logger.warning("[{}] Insufficient SOL balance for swap", self.account_id)
                         return None
 
-                    # Use lesser of target amount or available balance
-                    swap_amount = min(target_amount, available_sol)
-                    if swap_amount < target_amount:
-                        logger.warning(
-                            "[{}] Reducing swap from {} to {} SOL (insufficient balance)",
-                            self.account_id,
-                            target_amount,
-                            swap_amount
-                        )
-
-                    return swap_amount
+                    logger.info(
+                        "[{}] Using entire SOL balance: {}",
+                        self.account_id,
+                        available_sol
+                    )
+                    return available_sol
 
                 except Exception as e:
                     logger.error("[{}] Failed to check SOL balance: {}", self.account_id, e)
@@ -458,17 +378,13 @@ class SwapEngine:
                     )
                     return None
 
-                swap_amount = min(target_amount, available_base)
-                if swap_amount < target_amount:
-                    logger.warning(
-                        "[{}] Reducing swap from {} to {} {} (insufficient balance)",
-                        self.account_id,
-                        target_amount,
-                        swap_amount,
-                        base_token
-                    )
-
-                return swap_amount
+                logger.info(
+                    "[{}] Using entire {} balance: {}",
+                    self.account_id,
+                    base_token,
+                    available_base
+                )
+                return available_base
 
             except Exception as e:
                 logger.error("[{}] Failed to check {} balance: {}", self.account_id, base_token, e)
