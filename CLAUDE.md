@@ -20,26 +20,26 @@ cp .env.sample .env
 cp config.sample.yaml config.yaml
 
 # Run development server (hot-reload enabled)
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn main:app --host 0.0.0.0 --port 4201 --reload
 ```
 
 ### Testing Webhooks
 
 ```bash
 # Test JSON webhook
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: application/json" \
-  -d '{"action":"BUY","symbol":"SOL-SKR","amount":1.0}'
+  -d '{"action":"BUY","symbol":"SKR-USDC","amount":10.0}'
 
 # Test CSV payload (TradingView style)
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "action=SELL,symbol=SOL-SKR,amount=1.0"
+  --data-raw "action=SELL,symbol=SKR-USDC,amount=10.0"
 
 # Test indicator format
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "SOL-SKR,30s,indicator,BUY,1737385200,142.35"
+  --data-raw "SKR-USDC,30s,indicator,BUY,1737385200,0.032"
 ```
 
 ### Systemd Deployment
@@ -66,7 +66,7 @@ journalctl -u skr-swap -f -n 100
 
 The `AccountManager` orchestrates multiple independent wallet accounts:
 - Each account has its own wallet keypair and swap strategy
-- Accounts can target different token pairs (e.g., SOL-SKR, SOL-USDC)
+- Accounts can target different token pairs (e.g., SKR-USDC, SKR-SOL)
 - Risk limits (max_swap_size, min_balance) apply per account
 - The dashboard shows data from `dashboard.primary_account_id` in config
 
@@ -94,7 +94,7 @@ The `SwapEngine` implements signal-based trading logic:
 - Triggers swap execution via `SwapManager`
 
 Strategy parameters (per account):
-- `token_pair`: Trading pair (e.g., "SOL-SKR")
+- `token_pair`: Trading pair (e.g., "SKR-USDC")
 - `base_token`: Token to swap from (e.g., "SOL")
 - `quote_token`: Token to swap to (e.g., "SKR")
 - `default_swap_size`: Default amount to swap
@@ -261,7 +261,7 @@ For dashboard charts:
 - Database path: `./data/skr_swap.db` (WAL mode enabled)
 - Sensitive fields masked in logs automatically
 
-## Initial Implementation: SOL-SKR Swapping
+## Initial Implementation: SKR-USDC Swapping
 
 The first version focuses on a single account swapping between SOL and SKR:
 - Account: Single wallet with SOL and SKR balances
@@ -344,7 +344,7 @@ Before production:
 ## Roadmap
 
 ### Phase 1 (Current)
-- [x] Basic SOL-SKR swapping
+- [x] Basic SKR-USDC swapping
 - [x] TradingView webhook integration
 - [x] SQLite persistence
 - [x] Simple dashboard

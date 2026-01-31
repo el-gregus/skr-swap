@@ -1,5 +1,5 @@
 """Signal routing to wallet accounts."""
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Tuple, Any
 from loguru import logger
 
 from models.schemas import Signal
@@ -15,6 +15,81 @@ class SignalRouter:
     def __init__(self, account_manager: "AccountManager", analytics: "AnalyticsStore"):
         self.account_manager = account_manager
         self.analytics = analytics
+        self.sequence_state: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    def _normalize_signal_type(self, signal_type: str) -> str:
+        normalized = str(signal_type).strip().lower()
+        normalized = normalized.replace("_", "-").replace(" ", "-")
+        if normalized in {"mr-0.5", "mrlow"}:
+            return "mr-low"
+        return normalized
+
+    def _should_execute_sequence(self, account_id: str, signal: Signal) -> bool:
+        signal_type = signal.metadata.get("signal_type")
+        if not signal_type:
+            return True
+
+        signal_type = self._normalize_signal_type(signal_type)
+        key = (account_id, signal.symbol)
+        state = self.sequence_state.get(key)
+
+        if signal_type == "mr-low":
+            if state and state.get("action") != signal.action:
+                logger.info(
+                    "[{}] MR-Low opposite direction; resetting sequence for {}",
+                    account_id,
+                    signal.symbol,
+                )
+            self.sequence_state[key] = {"stage": "mr_low", "action": signal.action}
+            logger.info(
+                "[{}] MR-Low received; waiting for Mean ({})",
+                account_id,
+                signal.action,
+            )
+            return False
+
+        if signal_type == "mean":
+            if not state or state.get("stage") != "mr_low" or state.get("action") != signal.action:
+                logger.info(
+                    "[{}] Mean ignored; no MR-Low sequence for {} {}",
+                    account_id,
+                    signal.action,
+                    signal.symbol,
+                )
+                return False
+            state["stage"] = "mean"
+            logger.info(
+                "[{}] Mean received; waiting for Conf/Trend ({})",
+                account_id,
+                signal.action,
+            )
+            return False
+
+        if signal_type in {"conf", "trend"}:
+            if state and state.get("stage") == "mean" and state.get("action") == signal.action:
+                self.sequence_state.pop(key, None)
+                logger.info(
+                    "[{}] {} received; sequence complete for {}",
+                    account_id,
+                    signal_type,
+                    signal.symbol,
+                )
+                return True
+            logger.info(
+                "[{}] {} ignored; sequence incomplete for {} {}",
+                account_id,
+                signal_type,
+                signal.action,
+                signal.symbol,
+            )
+            return False
+
+        logger.info(
+            "[{}] Unrecognized signal type {}; ignoring",
+            account_id,
+            signal_type,
+        )
+        return False
 
     async def handle(self, signal: Signal) -> None:
         """
@@ -46,7 +121,8 @@ class SignalRouter:
             token_pair = strategy.get("token_pair", "")
 
             if token_pair == signal.symbol:
-                await account.swap_engine.process_signal(signal)
+                if self._should_execute_sequence(account.id, signal):
+                    await account.swap_engine.process_signal(signal)
                 routed += 1
 
         if routed == 0:

@@ -27,7 +27,7 @@ cp config.sample.yaml config.yaml
 # IMPORTANT: Add your wallet private key to .env
 
 # Run
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn main:app --host 0.0.0.0 --port 4201 --reload
 ```
 
 ## Configuration
@@ -57,19 +57,19 @@ Key settings:
 
 ```bash
 # JSON format
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: application/json" \
-  -d '{"action":"BUY","symbol":"SOL-SKR","amount":0.1}'
+  -d '{"action":"BUY","symbol":"SKR-USDC","amount":10.0}'
 
 # CSV format (TradingView compatible)
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: text/plain" \
-  --data-raw "action=BUY,symbol=SOL-SKR,amount=0.1"
+  --data-raw "action=BUY,symbol=SKR-USDC,amount=10.0"
 ```
 
 ### View Dashboard
 
-Open http://localhost:8080 in your browser to see:
+Open http://localhost:4201 in your browser to see:
 - Recent swaps with status
 - Signal history
 - Account balances (coming soon)

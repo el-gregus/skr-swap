@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class Signal(BaseModel):
     """Trading signal from webhook."""
     action: str  # BUY or SELL
-    symbol: str  # e.g., "SOL-SKR"
+    symbol: str  # e.g., "SKR-USDC"
     amount: Optional[float] = None
     price: Optional[float] = None
     timestamp: Optional[datetime] = None

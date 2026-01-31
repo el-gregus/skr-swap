@@ -16,7 +16,7 @@
 - `python -m venv .venv && source .venv/bin/activate`: create/activate venv.
 - `pip install -r requirements.txt`: install dependencies.
 - `cp config.sample.yaml config.yaml` and `cp .env.sample .env`: create configs.
-- `uvicorn main:app --host 0.0.0.0 --port 8080 --reload`: run locally.
+- `uvicorn main:app --host 0.0.0.0 --port 4201 --reload`: run locally.
 - `./test_webhook.sh`: send sample BUY/SELL webhooks for smoke testing.
 
 ## Coding Style & Naming Conventions

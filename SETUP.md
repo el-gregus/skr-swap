@@ -79,13 +79,13 @@ SOLANA_RPC_URL=https://your-rpc-endpoint.com
 
 ```bash
 # Development mode (with hot-reload)
-uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+uvicorn main:app --host 0.0.0.0 --port 4201 --reload
 
 # Or use Python directly
 python main.py
 ```
 
-The bot will start on http://localhost:8080
+The bot will start on http://localhost:4201
 
 ### 8. Test the Setup
 
@@ -96,17 +96,17 @@ Open a new terminal and run:
 ./test_webhook.sh
 
 # Or manually test
-curl -X POST http://localhost:8080/webhook \
+curl -X POST http://localhost:4201/webhook \
   -H "Content-Type: application/json" \
-  -d '{"action":"BUY","symbol":"SOL-SKR","amount":0.1}'
+  -d '{"action":"BUY","symbol":"SKR-USDC","amount":10.0}'
 ```
 
-View the dashboard at: http://localhost:8080
+View the dashboard at: http://localhost:4201
 
 ## Verify Everything Works
 
 1. ✅ Bot starts without errors
-2. ✅ Dashboard loads (http://localhost:8080)
+2. ✅ Dashboard loads (http://localhost:4201)
 3. ✅ Webhook endpoint responds
 4. ✅ Logs appear in `./logs/skr-swap.log`
 5. ✅ Database created at `./data/skr_swap.db`
@@ -168,7 +168,7 @@ Before going live with real funds:
 Once running:
 
 1. Monitor the logs: `tail -f logs/skr-swap.log`
-2. View dashboard: http://localhost:8080
+2. View dashboard: http://localhost:4201
 3. Send test signals via webhook
 4. Check swaps execute correctly on Solana Explorer
 5. Monitor gas usage and optimize

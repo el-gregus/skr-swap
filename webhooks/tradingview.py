@@ -8,14 +8,32 @@ from models.schemas import Signal
 
 router = APIRouter()
 
+def parse_signal_name(signal_name: str) -> Dict[str, Any]:
+    """
+    Parse signal name format: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME
+    Example: BUY|MR-Low|5m|SKR-USDC|2026-01-31T12:00:00Z
+    """
+    parts = [p.strip() for p in signal_name.split("|")]
+    if len(parts) < 5:
+        raise ValueError("Signal name must have 5 parts: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME")
+
+    action, signal_type, timeframe, symbol, signal_time = parts[:5]
+    return {
+        "action": action.upper(),
+        "signal_type": signal_type,
+        "timeframe": timeframe,
+        "symbol": symbol,
+        "signal_time": signal_time,
+    }
+
 
 def parse_webhook_payload(body: bytes, content_type: Optional[str]) -> Dict[str, Any]:
     """
     Parse webhook payload from TradingView.
 
     Supports:
-    - JSON format: {"action": "BUY", "symbol": "SOL-SKR", "amount": 1.0}
-    - CSV format: action=BUY,symbol=SOL-SKR,amount=1.0
+    - JSON format: {"action": "BUY", "symbol": "SKR-USDC", "amount": 10.0}
+    - CSV format: action=BUY,symbol=SKR-USDC,amount=10.0
     """
     try:
         # Try JSON first
@@ -54,7 +72,7 @@ async def webhook(request: Request) -> Dict[str, Any]:
     Expected payload:
     {
         "action": "BUY" or "SELL",
-        "symbol": "SOL-SKR",
+        "symbol": "SKR-USDC",
         "amount": 1.0  (optional),
         "note": "some note"  (optional)
     }
@@ -66,15 +84,35 @@ async def webhook(request: Request) -> Dict[str, Any]:
     # Parse payload
     payload = parse_webhook_payload(body, content_type)
 
-    # Validate required fields
     action = payload.get("action", "").upper()
+    symbol = payload.get("symbol")
+    signal_meta: Dict[str, Any] = {}
+
+    # Support signal name pattern: ACTION|TYPE|TIMEFRAME|SYMBOL|SIGNALTIME
+    signal_name = payload.get("signal") or payload.get("signal_name") or payload.get("alert_name")
+    if signal_name:
+        try:
+            parsed = parse_signal_name(str(signal_name))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid signal name: {e}"
+            )
+        action = parsed["action"]
+        symbol = parsed["symbol"]
+        signal_meta.update({
+            "signal_type": parsed["signal_type"],
+            "timeframe": parsed["timeframe"],
+            "signal_time": parsed["signal_time"],
+        })
+
+    # Validate required fields
     if action not in ("BUY", "SELL"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid action: {action}. Must be BUY or SELL."
         )
 
-    symbol = payload.get("symbol")
     if not symbol:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -96,7 +134,7 @@ async def webhook(request: Request) -> Dict[str, Any]:
         amount=amount,
         price=payload.get("price"),
         note=payload.get("note"),
-        metadata=payload,
+        metadata={**payload, **signal_meta},
     )
 
     logger.info("Webhook received: {} {} {}", action, symbol, amount or "")

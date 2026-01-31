@@ -13,14 +13,15 @@ accounts:
     enabled: true
     private_key: "${WALLET_PRIVATE_KEY}"  # From env var
     strategy:
-      token_pair: "SOL-SKR"
-      base_token: "SOL"
+      token_pair: "SKR-USDC"
+      base_token: "USDC"
       quote_token: "SKR"
-      default_swap_size: 0.1  # 0.1 SOL
+      default_swap_size: 10.0  # 10 USDC
       max_slippage_bps: 300  # 3%
       min_time_between_swaps: 30  # seconds
       min_skr_threshold: 0.1  # Minimum SKR to consider "holding" (for position checks)
       min_sol_reserve: 0.01  # Reserve SOL for transaction fees
+      min_base_reserve: 0  # Optional reserve for base token balance
 
 # Jupiter configuration
 jupiter:
