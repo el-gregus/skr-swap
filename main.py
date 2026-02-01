@@ -1,5 +1,6 @@
 """SKR Swap Bot - Solana token swap bot powered by Jupiter."""
 import asyncio
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -166,6 +167,7 @@ def create_app() -> FastAPI:
     app.state.solana = solana
     app.state.account_manager = account_manager
     app.state.signal_router = signal_router
+    app.state.totals_start = datetime.now(timezone.utc)
 
     # Include routers
     app.include_router(webhook_router, tags=["webhooks"])

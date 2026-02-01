@@ -296,7 +296,7 @@ async def dashboard_home():
                         </select>
                     </div>
                 </div>
-                <div id="swaps-totals" class="swaps-totals">Totals since Jan 23, 2026 10:09 PM NST: --</div>
+                <div id="swaps-totals" class="swaps-totals">Totals since --: --</div>
                 <div id="swaps">Loading...</div>
             </div>
 
@@ -517,9 +517,12 @@ async def dashboard_home():
                         const sign = pct > 0 ? '+' : '';
                         return `${token}: ${sign}${pct.toFixed(2)}%`;
                     });
+                    const startLabel = data.totals_start
+                        ? `${formatNLTime(data.totals_start)} NST`
+                        : 'now';
                     totalsEl.textContent = parts.length
-                        ? `Totals since Jan 23, 2026 10:09 PM NST: ${parts.join(' | ')}`
-                        : 'Totals since Jan 23, 2026 10:09 PM NST: -';
+                        ? `Totals since ${startLabel}: ${parts.join(' | ')}`
+                        : `Totals since ${startLabel}: -`;
                 }
             }
 
@@ -699,12 +702,15 @@ async def get_swaps(
                 prev_out = float(prev["output_amount"])
                 if prev_out != 0:
                     swap["change_pct"] = ((float(swap["output_amount"]) - prev_out) / prev_out) * 100
-    # Totals since Jan 23, 2026 10:09 PM NST (America/St_Johns)
-    start_local = datetime(2026, 1, 23, 22, 9, tzinfo=ZoneInfo("America/St_Johns"))
-    start_iso = start_local.astimezone(timezone.utc).isoformat()
+    # Totals since configured start (default: app start time)
+    totals_start = getattr(request.app.state, "totals_start", None)
+    if totals_start is None:
+        totals_start = datetime.now(timezone.utc)
+        request.app.state.totals_start = totals_start
+    start_iso = totals_start.astimezone(timezone.utc).isoformat()
     totals = analytics.get_output_change_totals(since_iso=start_iso, account_id=account_id)
 
-    return {"swaps": swaps, "totals": totals}
+    return {"swaps": swaps, "totals": totals, "totals_start": start_iso}
 
 
 @router.get("/api/signals")
