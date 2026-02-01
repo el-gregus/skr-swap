@@ -76,6 +76,7 @@ class JupiterClient:
         user_public_key: str,
         wrap_unwrap_sol: bool = True,
         compute_unit_price_micro_lamports: Optional[int] = None,
+        fee_account: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Get a swap transaction from Jupiter based on a quote.
@@ -95,6 +96,9 @@ class JupiterClient:
                 "userPublicKey": user_public_key,
                 "wrapAndUnwrapSol": wrap_unwrap_sol,
             }
+
+            if fee_account:
+                payload["feeAccount"] = fee_account
 
             if compute_unit_price_micro_lamports:
                 payload["prioritizationFeeLamports"] = {

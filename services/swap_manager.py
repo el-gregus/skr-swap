@@ -10,6 +10,7 @@ from services.analytics_store import AnalyticsStore
 from utils.wallet import to_lamports, format_lamports
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from spl.token.instructions import get_associated_token_address
 
 
 class SwapManager:
@@ -106,10 +107,31 @@ class SwapManager:
                 logger.debug("[{}] Getting swap transaction...", self.account_id)
                 compute_unit_price = self.config.get("jupiter", {}).get("compute_unit_price", 100000)
 
+                fee_account = None
+                if quote.get("platformFee"):
+                    fee_account = self.config.get("jupiter", {}).get("fee_account")
+                    if not fee_account:
+                        try:
+                            owner = Pubkey.from_string(str(self.keypair.pubkey()))
+                            mint = Pubkey.from_string(output_mint)
+                            fee_account = str(get_associated_token_address(owner, mint))
+                            logger.info(
+                                "[{}] Using derived fee account {} for platform fee",
+                                self.account_id,
+                                fee_account,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "[{}] Failed to derive fee account: {}",
+                                self.account_id,
+                                e,
+                            )
+
                 swap_tx = await self.jupiter.get_swap_transaction(
                     quote=quote,
                     user_public_key=str(self.keypair.pubkey()),
                     compute_unit_price_micro_lamports=compute_unit_price,
+                    fee_account=fee_account,
                 )
 
                 if not swap_tx:
