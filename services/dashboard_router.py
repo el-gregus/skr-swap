@@ -797,6 +797,36 @@ async def get_balances(
             })
 
     # Get USD prices from Jupiter (API key configured)
+    # Get USDC balance
+    if "USDC" in tokens:
+        try:
+            usdc_balance_raw = await solana.get_token_balance(
+                Pubkey.from_string(str(wallet_pubkey)),
+                Pubkey.from_string(tokens["USDC"])
+            )
+            if usdc_balance_raw is not None:
+                decimals = await solana.get_token_decimals(
+                    Pubkey.from_string(tokens["USDC"])
+                )
+                decimals = decimals if decimals is not None else 6
+                usdc_balance = usdc_balance_raw / (10 ** decimals)
+            else:
+                usdc_balance = 0
+
+            balances.append({
+                "token": "USDC",
+                "balance": usdc_balance,
+                "mint": tokens["USDC"],
+            })
+        except Exception as e:
+            logger.error("Failed to get USDC balance: {}", str(e))
+            balances.append({
+                "token": "USDC",
+                "balance": 0,
+                "mint": tokens["USDC"],
+            })
+
+    # Get USD prices from Jupiter (API key configured)
     token_mints = [b["mint"] for b in balances]
     prices = {}
 
