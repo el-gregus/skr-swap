@@ -57,3 +57,4 @@ logging:
 dashboard:
   primary_account_id: "wallet-1"
   password: "${DASHBOARD_PASSWORD}"
+  totals_start: "2026-02-01 00:00"  # Newfoundland Time (America/St_Johns)

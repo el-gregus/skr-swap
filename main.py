@@ -1,6 +1,7 @@
 """SKR Swap Bot - Solana token swap bot powered by Jupiter."""
 import asyncio
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -167,7 +168,21 @@ def create_app() -> FastAPI:
     app.state.solana = solana
     app.state.account_manager = account_manager
     app.state.signal_router = signal_router
-    app.state.totals_start = datetime.now(timezone.utc)
+
+    totals_start_cfg = config.get("dashboard", {}).get("totals_start")
+    totals_start = None
+    if totals_start_cfg:
+        try:
+            totals_start = datetime.fromisoformat(str(totals_start_cfg))
+            if totals_start.tzinfo is None:
+                totals_start = totals_start.replace(tzinfo=ZoneInfo("America/St_Johns"))
+        except Exception as exc:
+            logger.warning("Invalid totals_start config '{}': {}", totals_start_cfg, exc)
+
+    if totals_start is None:
+        totals_start = datetime(2026, 2, 1, 0, 0, tzinfo=ZoneInfo("America/St_Johns"))
+
+    app.state.totals_start = totals_start.astimezone(timezone.utc)
 
     # Include routers
     app.include_router(webhook_router, tags=["webhooks"])
