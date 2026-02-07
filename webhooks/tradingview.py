@@ -172,7 +172,13 @@ async def webhook(request: Request) -> Dict[str, Any]:
         metadata={**payload, **signal_meta},
     )
 
-    logger.info("Webhook received: {} {} {}", action, symbol, amount or "")
+    logger.info(
+        "Webhook received: {} {} {} {}",
+        action,
+        symbol,
+        signal_meta.get("signal_type") or "-",
+        amount or "",
+    )
 
     # Get signal router from app state
     signal_router = getattr(request.app.state, "signal_router", None)
