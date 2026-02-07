@@ -200,6 +200,23 @@ async def dashboard_home():
                 color: #aaa;
                 font-size: 12px;
             }
+            .signal-pill {
+                display: inline-flex;
+                align-items: center;
+                padding: 2px 8px;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.2px;
+                background: rgba(255, 255, 255, 0.06);
+                color: #e5e5e5;
+            }
+            .signal-type-mr-low { background: rgba(0, 200, 255, 0.15); color: #7fe4ff; }
+            .signal-type-mean { background: rgba(255, 206, 86, 0.15); color: #ffd56e; }
+            .signal-type-conf { background: rgba(0, 212, 127, 0.15); color: #60e6a9; }
+            .signal-type-trend { background: rgba(0, 168, 255, 0.15); color: #7fc8ff; }
+            .signal-type-unknown { background: rgba(255, 255, 255, 0.08); color: #cfcfcf; }
+            .signal-timeframe { background: rgba(255, 255, 255, 0.08); color: #cfd5ff; }
             .total-value {
                 font-size: 14px;
                 font-weight: 600;
@@ -302,7 +319,17 @@ async def dashboard_home():
             </div>
 
             <div class="section">
-                <h2>Recent Signals</h2>
+                <div class="section-header">
+                    <h2>Recent Signals</h2>
+                    <div class="swaps-controls">
+                        <label for="signals-sort" style="color:#aaa;font-size:12px;margin-right:6px;">Sort</label>
+                        <select id="signals-sort">
+                            <option value="time" selected>Time</option>
+                            <option value="type">Type</option>
+                            <option value="timeframe">Timeframe</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="signals">Loading...</div>
             </div>
         </div>
@@ -588,6 +615,18 @@ async def dashboard_home():
             async function loadSignals() {
                 const response = await fetch('/api/signals?limit=10');
                 const data = await response.json();
+                const sortEl = document.getElementById('signals-sort');
+                const sortBy = sortEl ? sortEl.value : 'time';
+                const signals = (data.signals || []).slice();
+                if (sortBy !== 'time') {
+                    signals.sort((a, b) => {
+                        const aVal = (a[sortBy] || '').toString().toLowerCase();
+                        const bVal = (b[sortBy] || '').toString().toLowerCase();
+                        if (aVal < bVal) return -1;
+                        if (aVal > bVal) return 1;
+                        return 0;
+                    });
+                }
 
                 const html = `
                     <table>
@@ -603,17 +642,24 @@ async def dashboard_home():
                             </tr>
                         </thead>
                         <tbody>
-                            ${data.signals.map(signal => `
+                            ${signals.map(signal => {
+                                const typeRaw = (signal.signal_type || '').toString();
+                                const typeKey = typeRaw.toLowerCase().replace(/\\s+/g, '-');
+                                const typeClass = typeKey ? `signal-type-${typeKey}` : 'signal-type-unknown';
+                                const typeLabel = typeRaw || '-';
+                                const tfLabel = signal.timeframe || '-';
+                                return `
                                 <tr>
                                     <td>${formatNLTime(signal.received_at)}</td>
                                     <td>${signal.action}</td>
                                     <td>${signal.symbol}</td>
-                                    <td>${signal.signal_type || '-'}</td>
-                                    <td>${signal.timeframe || '-'}</td>
+                                    <td><span class="signal-pill ${typeClass}">${typeLabel}</span></td>
+                                    <td><span class="signal-pill signal-timeframe">${tfLabel}</span></td>
                                     <td>${signal.amount || '-'}</td>
                                     <td>${signal.note || '-'}</td>
                                 </tr>
-                            `).join('')}
+                            `;
+                            }).join('')}
                         </tbody>
                     </table>
                 `;
@@ -637,6 +683,10 @@ async def dashboard_home():
             const swapsLimit = document.getElementById('swaps-limit');
             if (swapsLimit) {
                 swapsLimit.addEventListener('change', () => loadSwaps());
+            }
+            const signalsSort = document.getElementById('signals-sort');
+            if (signalsSort) {
+                signalsSort.addEventListener('change', () => loadSignals());
             }
         </script>
     </body>
