@@ -123,10 +123,11 @@ class SignalRouter:
             signal: Parsed trading signal
         """
         logger.info(
-            "Routing signal: {} {} {}",
+            "Routing signal: {} {} {} {}",
             signal.action,
             signal.symbol,
             signal.metadata.get("signal_type") or "-",
+            signal.metadata.get("timeframe") or "-",
         )
 
         # Route to matching accounts

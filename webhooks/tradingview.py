@@ -173,10 +173,11 @@ async def webhook(request: Request) -> Dict[str, Any]:
     )
 
     logger.info(
-        "Webhook received: {} {} {} {}",
+        "Webhook received: {} {} {} {} {}",
         action,
         symbol,
         signal_meta.get("signal_type") or "-",
+        signal_meta.get("timeframe") or "-",
         amount or "",
     )
 

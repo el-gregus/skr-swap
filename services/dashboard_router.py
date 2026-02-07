@@ -1,4 +1,5 @@
 """Dashboard API endpoints for SKR Swap."""
+import json
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -595,6 +596,8 @@ async def dashboard_home():
                                 <th>Time (NST/NDT)</th>
                                 <th>Action</th>
                                 <th>Symbol</th>
+                                <th>Type</th>
+                                <th>Timeframe</th>
                                 <th>Amount</th>
                                 <th>Note</th>
                             </tr>
@@ -605,6 +608,8 @@ async def dashboard_home():
                                     <td>${formatNLTime(signal.received_at)}</td>
                                     <td>${signal.action}</td>
                                     <td>${signal.symbol}</td>
+                                    <td>${signal.signal_type || '-'}</td>
+                                    <td>${signal.timeframe || '-'}</td>
                                     <td>${signal.amount || '-'}</td>
                                     <td>${signal.note || '-'}</td>
                                 </tr>
@@ -726,6 +731,15 @@ async def get_signals(
         account_id=account_id,
         limit=limit,
     )
+
+    for signal in signals:
+        raw_payload = signal.get("raw_payload") or "{}"
+        try:
+            payload = json.loads(raw_payload)
+        except Exception:
+            payload = {}
+        signal["signal_type"] = payload.get("signal_type")
+        signal["timeframe"] = payload.get("timeframe")
 
     return {"signals": signals}
 
