@@ -38,7 +38,7 @@ async def _get_token_metadata(request: Request) -> Dict[str, Dict[str, Any]]:
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get("https://token.jup.ag/strict")
+            resp = await client.get("https://token.jup.ag/all")
             resp.raise_for_status()
             data = resp.json()
             metadata = {
@@ -989,6 +989,10 @@ async def get_balances(
     
     balances = []
     symbol_by_mint = {mint: symbol for symbol, mint in tokens.items() if mint}
+    symbol_overrides = {
+        "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+        "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups": "URANUS",
+    }
     token_metadata = await _get_token_metadata(request)
 
     # Get SOL balance
@@ -1062,7 +1066,12 @@ async def get_balances(
         if balance <= 0:
             continue
         meta = token_metadata.get(mint, {})
-        symbol = meta.get("symbol") or symbol_by_mint.get(mint) or f"{mint[:4]}...{mint[-4:]}"
+        symbol = (
+            meta.get("symbol")
+            or symbol_overrides.get(mint)
+            or symbol_by_mint.get(mint)
+            or f"{mint[:4]}...{mint[-4:]}"
+        )
         name = meta.get("name")
         balances.append({
             "token": symbol,
