@@ -1019,9 +1019,12 @@ async def get_balances(
 
     # Get all SPL token balances (non-zero)
     mint_balances: Dict[str, float] = {}
-    program_ids = [TOKEN_PROGRAM_ID]
+    program_ids = [str(TOKEN_PROGRAM_ID)]
     if TOKEN_2022_PROGRAM_ID:
-        program_ids.append(TOKEN_2022_PROGRAM_ID)
+        program_ids.append(str(TOKEN_2022_PROGRAM_ID))
+    else:
+        # Fallback Token-2022 program id for environments without spl.token_2022
+        program_ids.append("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 
     rpc_url = getattr(solana, "rpc_url", None) or config.get("solana", {}).get("rpc_url")
     if rpc_url:
@@ -1034,7 +1037,7 @@ async def get_balances(
                         "method": "getTokenAccountsByOwner",
                         "params": [
                             str(wallet_pubkey),
-                            {"programId": str(program_id)},
+                            {"programId": program_id},
                             {"encoding": "jsonParsed"},
                         ],
                     }
