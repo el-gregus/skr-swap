@@ -12,6 +12,25 @@ from loguru import logger
 router = APIRouter()
 
 
+def _parse_baseline_iso(baseline_iso: Optional[str]) -> Optional[str]:
+    """Normalize a baseline timestamp to UTC ISO format for DB baseline queries."""
+    if not baseline_iso:
+        return None
+
+    value = str(baseline_iso).strip()
+    if not value:
+        return None
+
+    # Accept ISO strings ending with "Z".
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+
+
 def _get_analytics(request: Request):
     """Get analytics store from app state."""
     analytics = getattr(request.app.state, "analytics", None)
@@ -191,6 +210,26 @@ async def dashboard_home():
                 color: #888;
                 margin-top: 5px;
             }
+            .baseline-control {
+                margin-top: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                align-items: flex-end;
+            }
+            .baseline-control label {
+                font-size: 11px;
+                color: #999;
+                letter-spacing: 0.2px;
+            }
+            .baseline-control input {
+                background: #1f1f1f;
+                color: #ddd;
+                border: 1px solid #444;
+                border-radius: 6px;
+                padding: 4px 8px;
+                font-size: 12px;
+            }
             .loading {
                 color: #aaa;
                 font-size: 12px;
@@ -274,6 +313,16 @@ async def dashboard_home():
                 font-weight: 600;
                 color: #00d4aa;
             }
+            .balances-header {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+                margin-bottom: 4px;
+            }
+            .balances-header h2 {
+                margin: 0;
+            }
             table {
                 width: 100%;
                 border-collapse: collapse;
@@ -350,11 +399,15 @@ async def dashboard_home():
                 <div class="clock-container">
                     <div class="clock-nl" id="clock-nl">--:--:-- --</div>
                     <div class="clock-utc" id="clock-utc">UTC: --:--:--</div>
+                    <div class="baseline-control">
+                        <label for="balance-baseline">Change Start</label>
+                        <input type="datetime-local" id="balance-baseline" />
+                    </div>
                 </div>
             </div>
             <div class="asset-tabs" id="asset-tabs"></div>
             <div class="section">
-                <div class="section-header">
+                <div class="balances-header">
                     <h2>💰 Wallet Balances</h2>
                     <div id="balances-total" class="total-value">Total Value: --</div>
                 </div>
@@ -398,6 +451,7 @@ async def dashboard_home():
             let assets = [];
             let currentAsset = null;
             let currentTokens = ["SOL", "SKR"];
+            const BALANCE_BASELINE_KEY = "balanceBaselineIso";
 
             // Format dates in Newfoundland Time (12-hour format)
             function formatNLTime(dateString) {
@@ -690,7 +744,17 @@ async def dashboard_home():
                 const balancesEl = document.getElementById("balances");
                 try {
                     const accountId = currentAsset ? currentAsset.id : "wallet-1";
-                    const response = await fetch(`/api/balances/${accountId}`);
+                    const baselineInput = document.getElementById("balance-baseline");
+                    let baselineIso = null;
+                    if (baselineInput && baselineInput.value) {
+                        const parsed = new Date(baselineInput.value);
+                        if (!isNaN(parsed.getTime())) {
+                            baselineIso = parsed.toISOString();
+                            localStorage.setItem(BALANCE_BASELINE_KEY, baselineIso);
+                        }
+                    }
+                    const baselineParam = baselineIso ? `?baseline_iso=${encodeURIComponent(baselineIso)}` : "";
+                    const response = await fetch(`/api/balances/${accountId}${baselineParam}`);
                     if (!response.ok) {
                         if (lastBalancesHtml) {
                             balancesEl.innerHTML = lastBalancesHtml;
@@ -813,6 +877,23 @@ async def dashboard_home():
             }
 
             // Load data
+            const baselineInput = document.getElementById("balance-baseline");
+            if (baselineInput) {
+                const storedBaselineIso = localStorage.getItem(BALANCE_BASELINE_KEY);
+                const baselineDate = storedBaselineIso ? new Date(storedBaselineIso) : new Date();
+                if (!isNaN(baselineDate.getTime())) {
+                    const localIso = new Date(baselineDate.getTime() - baselineDate.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                    baselineInput.value = localIso;
+                }
+                baselineInput.addEventListener("change", () => {
+                    if (currentAsset) {
+                        loadBalances();
+                    }
+                });
+            }
+
             loadAssets();
 
             // Refresh every 5 seconds
@@ -980,8 +1061,10 @@ async def get_assets(request: Request) -> Dict[str, Any]:
 async def get_balances(
     request: Request,
     account_id: str,
+    baseline_iso: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Get token balances for an account with USD values."""
+    analytics = _get_analytics(request)
     manager = _get_account_manager(request)
     
     account = manager.get_account(account_id)
@@ -1117,39 +1200,50 @@ async def get_balances(
         balance["value_usd"] = usd_value
         total_usd += usd_value
 
-    # Initialize baseline tracking for balance and USD changes
-    baselines = getattr(request.app.state, "balance_baselines", None)
-    if baselines is None:
-        baselines = {}
-        request.app.state.balance_baselines = baselines
-    account_baseline = baselines.setdefault(account_id, {})
+    if baseline_iso:
+        try:
+            parsed_baseline = _parse_baseline_iso(baseline_iso)
+            baseline_anchor_iso = (
+                parsed_baseline
+                if parsed_baseline
+                else datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid baseline_iso format")
+    else:
+        baseline_anchor_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    # Persist every balance fetch so baseline calculations survive restarts.
+    analytics.record_wallet_balance_snapshots(
+        account_id=account_id,
+        balances=balances,
+    )
+
+    baseline_by_mint = analytics.get_wallet_balance_baselines(
+        account_id=account_id,
+        baseline_iso=baseline_anchor_iso,
+    )
 
     for balance in balances:
         mint = balance["mint"]
-        baseline_entry = account_baseline.get(mint)
+        baseline_entry = baseline_by_mint.get(mint)
         if baseline_entry is None:
             baseline_entry = {
                 "balance": balance["balance"],
                 "usd": balance["value_usd"],
             }
-            account_baseline[mint] = baseline_entry
-        elif not isinstance(baseline_entry, dict):
-            # Backward compatibility for old in-memory baseline format (float balance).
-            baseline_entry = {
-                "balance": float(baseline_entry),
-                "usd": float(baseline_entry) * balance["price_usd"],
-            }
-            account_baseline[mint] = baseline_entry
 
         base_balance = baseline_entry.get("balance", 0)
         base_usd = baseline_entry.get("usd", 0)
 
         change_amount = balance["balance"] - base_balance
         balance["change_amount"] = change_amount
-        balance["change_usd"] = balance["value_usd"] - base_usd
+        change_usd = balance["value_usd"] - base_usd
+        balance["change_usd"] = change_usd
 
-        if base_balance and base_balance != 0:
-            balance["change_pct"] = (change_amount / base_balance) * 100
+        # "Change" represents overall USD value change from the selected baseline.
+        if base_usd and base_usd != 0:
+            balance["change_pct"] = (change_usd / base_usd) * 100
         else:
             balance["change_pct"] = None
     
@@ -1159,4 +1253,5 @@ async def get_balances(
         "wallet_address": str(wallet_pubkey),
         "balances": balances,
         "total_usd": total_usd,
+        "baseline_iso": baseline_anchor_iso,
     }

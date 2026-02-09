@@ -106,6 +106,20 @@ class AnalyticsStore:
                 )
             """)
 
+            # Wallet balance snapshots table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS wallet_balance_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id TEXT NOT NULL,
+                    mint TEXT NOT NULL,
+                    token TEXT NOT NULL,
+                    balance REAL NOT NULL,
+                    price_usd REAL NOT NULL,
+                    value_usd REAL NOT NULL,
+                    captured_at TEXT NOT NULL
+                )
+            """)
+
             # Price ticks table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS price_ticks (
@@ -125,6 +139,12 @@ class AnalyticsStore:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_price_ticks_symbol_ts ON price_ticks(symbol, timestamp DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_wallet_balance_snapshots_account_mint_ts ON wallet_balance_snapshots(account_id, mint, captured_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_wallet_balance_snapshots_account_ts ON wallet_balance_snapshots(account_id, captured_at DESC)"
             )
 
     def record_signal(
@@ -405,6 +425,101 @@ class AnalyticsStore:
                 (account_id,),
             )
             return {row["token"]: row["balance"] for row in cur.fetchall()}
+
+    def record_wallet_balance_snapshots(
+        self,
+        account_id: str,
+        balances: List[Dict[str, Any]],
+        captured_at: Optional[str] = None,
+    ) -> None:
+        """Persist a point-in-time wallet snapshot for baseline calculations."""
+        ts = captured_at or datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        rows = []
+        for item in balances:
+            mint = item.get("mint")
+            token = item.get("token")
+            if not mint or not token:
+                continue
+            rows.append(
+                (
+                    account_id,
+                    str(mint),
+                    str(token),
+                    float(item.get("balance") or 0),
+                    float(item.get("price_usd") or 0),
+                    float(item.get("value_usd") or 0),
+                    ts,
+                )
+            )
+
+        if not rows:
+            return
+
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO wallet_balance_snapshots (
+                    account_id, mint, token, balance, price_usd, value_usd, captured_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+
+    def get_wallet_balance_baselines(
+        self,
+        account_id: str,
+        baseline_iso: str,
+    ) -> Dict[str, Dict[str, float]]:
+        """
+        Return per-mint baseline values around a target timestamp.
+
+        Selection rule:
+        1) first snapshot at/after baseline time
+        2) fallback to most recent snapshot before baseline
+        """
+        baselines: Dict[str, Dict[str, float]] = {}
+
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                SELECT mint, balance, value_usd, captured_at
+                FROM wallet_balance_snapshots
+                WHERE account_id = ? AND captured_at >= ?
+                ORDER BY captured_at ASC
+                """,
+                (account_id, baseline_iso),
+            )
+            for row in cur.fetchall():
+                mint = str(row["mint"])
+                if mint in baselines:
+                    continue
+                baselines[mint] = {
+                    "balance": float(row["balance"]),
+                    "usd": float(row["value_usd"]),
+                    "captured_at": str(row["captured_at"]),
+                }
+
+            cur = conn.execute(
+                """
+                SELECT mint, balance, value_usd, captured_at
+                FROM wallet_balance_snapshots
+                WHERE account_id = ? AND captured_at < ?
+                ORDER BY captured_at DESC
+                """,
+                (account_id, baseline_iso),
+            )
+            for row in cur.fetchall():
+                mint = str(row["mint"])
+                if mint in baselines:
+                    continue
+                baselines[mint] = {
+                    "balance": float(row["balance"]),
+                    "usd": float(row["value_usd"]),
+                    "captured_at": str(row["captured_at"]),
+                }
+
+        return baselines
 
     def record_price(self, symbol: str, price: float) -> None:
         """Record a price tick."""
