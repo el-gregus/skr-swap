@@ -714,6 +714,7 @@ async def dashboard_home():
                                 <th>Balance</th>
                                 <th>Price (USD)</th>
                                 <th>Value (USD)</th>
+                                <th>Δ Qty</th>
                                 <th>Change</th>
                             </tr>
                         </thead>
@@ -728,6 +729,9 @@ async def dashboard_home():
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
+                                    <td class="${(b.change_amount ?? 0) > 0 ? 'change-up' : (b.change_amount ?? 0) < 0 ? 'change-down' : 'change-flat'}">
+                                        ${b.change_amount == null ? '-' : `${(b.change_amount > 0 ? '+' : '')}${Number(b.change_amount).toFixed(6)}`}
+                                    </td>
                                     <td class="${(b.change_pct ?? 0) > 0 ? 'change-up' : (b.change_pct ?? 0) < 0 ? 'change-down' : 'change-flat'}">
                                         ${b.change_pct == null ? '-' : `${(b.change_pct > 0 ? '+' : '')}${b.change_pct.toFixed(2)}%`}
                                     </td>
@@ -1111,8 +1115,10 @@ async def get_balances(
         if mint not in account_baseline:
             account_baseline[mint] = balance["balance"]
         base_value = account_baseline.get(mint, 0)
+        change_amount = balance["balance"] - base_value
+        balance["change_amount"] = change_amount
         if base_value and base_value != 0:
-            balance["change_pct"] = ((balance["balance"] - base_value) / base_value) * 100
+            balance["change_pct"] = (change_amount / base_value) * 100
         else:
             balance["change_pct"] = None
 
