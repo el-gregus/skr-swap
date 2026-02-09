@@ -707,6 +707,7 @@ async def dashboard_home():
                 if (!assets.length) {
                     assets = [{
                         id: "wallet-1",
+                        account_id: "wallet-1",
                         label: "Default",
                         token_pair: "SOL-SKR",
                         price_symbols: ["SOL", "SKR"]
@@ -726,7 +727,7 @@ async def dashboard_home():
             async function loadSwaps() {
                 const limitEl = document.getElementById('swaps-limit');
                 const limit = limitEl ? limitEl.value : 10;
-                const accountId = currentAsset ? currentAsset.id : null;
+                const accountId = currentAsset ? (currentAsset.account_id || currentAsset.id) : null;
                 const response = await fetch(`/api/swaps?limit=${limit}${accountId ? `&account_id=${accountId}` : ''}`);
                 const data = await response.json();
 
@@ -807,7 +808,7 @@ async def dashboard_home():
             async function loadBalances() {
                 const balancesEl = document.getElementById("balances");
                 try {
-                    const accountId = currentAsset ? currentAsset.id : "wallet-1";
+                    const accountId = currentAsset ? (currentAsset.account_id || currentAsset.id) : "wallet-1";
                     const baselineInput = document.getElementById("balance-baseline");
                     let baselineIso = null;
                     if (baselineInput && baselineInput.value) {
@@ -886,7 +887,7 @@ async def dashboard_home():
             }
 
             async function loadSignals() {
-                const accountId = currentAsset ? currentAsset.id : null;
+                const accountId = currentAsset ? (currentAsset.account_id || currentAsset.id) : null;
                 const response = await fetch(`/api/signals?limit=10${accountId ? `&account_id=${accountId}` : ''}`);
                 const data = await response.json();
                 const sortEl = document.getElementById('signals-sort');
@@ -1089,34 +1090,93 @@ async def get_signals(
 async def get_assets(request: Request) -> Dict[str, Any]:
     """Get configured assets for dashboard tabs."""
     manager = _get_account_manager(request)
+    config = getattr(request.app.state, "config", {})
+    dashboard_cfg = config.get("dashboard", {}) if isinstance(config, dict) else {}
     assets = []
+
+    account_ids = list(manager.accounts.keys())
+    primary_account_id = dashboard_cfg.get("primary_account_id")
+    default_account_id = (
+        primary_account_id
+        if primary_account_id in manager.accounts
+        else (account_ids[0] if account_ids else None)
+    )
+
+    def _derive_price_symbols(
+        token_pair: str,
+        quote_token: Optional[str],
+        base_token: Optional[str],
+    ) -> List[str]:
+        pair_symbols: List[str] = []
+        if token_pair and "-" in token_pair:
+            pair_symbols = [s.strip().upper() for s in token_pair.split("-") if s and s.strip()]
+        else:
+            for sym in (quote_token, base_token):
+                if sym:
+                    sym_up = str(sym).strip().upper()
+                    if sym_up and sym_up not in pair_symbols:
+                        pair_symbols.append(sym_up)
+
+        if "SOL" in pair_symbols and "USDC" in pair_symbols:
+            return ["SOL", "BTC"]
+
+        companion = None
+        for sym in pair_symbols:
+            if sym != "USDC":
+                companion = sym
+                break
+
+        if companion and companion != "SOL":
+            return ["SOL", companion]
+
+        if pair_symbols:
+            symbols = [pair_symbols[0]]
+            if len(pair_symbols) > 1:
+                symbols.append(pair_symbols[1])
+            return symbols
+
+        return ["SOL", "SKR"]
 
     for account in manager.accounts.values():
         strategy = account.strategy or {}
         token_pair = strategy.get("token_pair", "")
         base_token = strategy.get("base_token")
         quote_token = strategy.get("quote_token")
-        price_symbols = []
-
-        if token_pair and "-" in token_pair:
-            for sym in token_pair.split("-"):
-                if sym and sym not in price_symbols:
-                    price_symbols.append(sym)
-        else:
-            for sym in (quote_token, base_token):
-                if sym and sym not in price_symbols:
-                    price_symbols.append(sym)
+        price_symbols = _derive_price_symbols(token_pair, quote_token, base_token)
 
         label = token_pair or (f"{quote_token}-{base_token}" if quote_token and base_token else account.label)
 
         assets.append({
             "id": account.id,
+            "account_id": account.id,
             "label": label,
             "token_pair": token_pair,
             "base_token": base_token,
             "quote_token": quote_token,
             "price_symbols": price_symbols,
         })
+
+    required_pairs = ["SOL-USDC", "PUMP-USDC", "URANUS-USDC"]
+    existing_pairs = {
+        str(asset.get("token_pair", "")).strip().upper()
+        for asset in assets
+        if asset.get("token_pair")
+    }
+
+    if default_account_id:
+        for pair in required_pairs:
+            if pair in existing_pairs:
+                continue
+            quote_token, base_token = pair.split("-", 1)
+            assets.append({
+                "id": f"tab-{pair.lower()}",
+                "account_id": default_account_id,
+                "label": pair,
+                "token_pair": pair,
+                "base_token": base_token,
+                "quote_token": quote_token,
+                "price_symbols": _derive_price_symbols(pair, quote_token, base_token),
+            })
 
     return {"assets": assets}
 

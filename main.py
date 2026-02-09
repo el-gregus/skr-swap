@@ -43,7 +43,23 @@ async def _price_poller(app: FastAPI) -> None:
                 symbols.append(sym)
     if not symbols:
         symbols = ["SOL", "SKR"]
-    symbol_mints = {symbol: tokens.get(symbol) for symbol in symbols}
+
+    # Keep chart data available for dashboard tabs, including synthetic ones.
+    for sym in ["SOL", "SKR", "PUMP", "URANUS", "BTC"]:
+        if sym not in symbols:
+            symbols.append(sym)
+
+    fallback_mints = {
+        "BTC": "9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E",
+        "PUMP": "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn",
+        "URANUS": "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups",
+    }
+    symbol_mints = {}
+    for symbol in symbols:
+        mint = tokens.get(symbol) or fallback_mints.get(symbol)
+        if mint:
+            symbol_mints[symbol] = mint
+
     poll_interval = config.get("dashboard", {}).get("price_poll_interval", 60)
 
     while True:
