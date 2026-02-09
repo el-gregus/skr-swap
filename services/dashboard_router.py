@@ -1118,7 +1118,7 @@ async def get_assets(request: Request) -> Dict[str, Any]:
                         pair_symbols.append(sym_up)
 
         if "SOL" in pair_symbols and "USDC" in pair_symbols:
-            return ["SOL", "BTC"]
+            return ["SOL", "SKR"]
 
         companion = None
         for sym in pair_symbols:
