@@ -1,5 +1,6 @@
 """Dashboard API endpoints for SOL Swap."""
 import json
+import httpx
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -965,7 +966,6 @@ async def get_balances(
 
     # Get SOL balance
     from solders.pubkey import Pubkey
-    from solana.rpc.types import TokenAccountOpts
     from spl.token.constants import TOKEN_PROGRAM_ID
     try:
         from spl.token_2022.constants import TOKEN_2022_PROGRAM_ID
@@ -991,33 +991,43 @@ async def get_balances(
     if TOKEN_2022_PROGRAM_ID:
         program_ids.append(TOKEN_2022_PROGRAM_ID)
 
-    for program_id in program_ids:
+    rpc_url = getattr(solana, "rpc_url", None) or config.get("solana", {}).get("rpc_url")
+    if rpc_url:
         try:
-            resp = await solana.client.get_token_accounts_by_owner(
-                wallet_pubkey,
-                TokenAccountOpts(program_id=program_id, encoding="jsonParsed"),
-            )
-            for item in resp.value or []:
-                data = item.account.data
-                parsed = getattr(data, "parsed", None)
-                if parsed is None and isinstance(data, dict):
-                    parsed = data.get("parsed")
-                if not parsed or not isinstance(parsed, dict):
-                    continue
-                info = parsed.get("info") or {}
-                mint = info.get("mint")
-                token_amount = info.get("tokenAmount") or {}
-                ui_amount = token_amount.get("uiAmount")
-                if ui_amount is None:
-                    try:
-                        ui_amount = float(token_amount.get("uiAmountString") or 0)
-                    except Exception:
-                        ui_amount = 0
-                if not mint or not ui_amount or ui_amount <= 0:
-                    continue
-                mint_balances[mint] = mint_balances.get(mint, 0) + float(ui_amount)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for program_id in program_ids:
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "getTokenAccountsByOwner",
+                        "params": [
+                            str(wallet_pubkey),
+                            {"programId": str(program_id)},
+                            {"encoding": "jsonParsed"},
+                        ],
+                    }
+                    resp = await client.post(rpc_url, json=payload)
+                    data = resp.json()
+                    if data.get("error"):
+                        logger.error("Failed to list token balances: {}", data["error"])
+                        continue
+                    for item in (data.get("result", {}) or {}).get("value", []):
+                        info = (((item.get("account") or {}).get("data") or {}).get("parsed") or {}).get("info") or {}
+                        mint = info.get("mint")
+                        token_amount = info.get("tokenAmount") or {}
+                        ui_amount = token_amount.get("uiAmount")
+                        if ui_amount is None:
+                            try:
+                                ui_amount = float(token_amount.get("uiAmountString") or 0)
+                            except Exception:
+                                ui_amount = 0
+                        if not mint or not ui_amount or ui_amount <= 0:
+                            continue
+                        mint_balances[mint] = mint_balances.get(mint, 0) + float(ui_amount)
         except Exception as e:
             logger.error("Failed to list token balances: {}", e)
+    else:
+        logger.warning("Solana RPC URL not configured; skipping token balances")
 
     for mint, balance in mint_balances.items():
         if balance <= 0:
