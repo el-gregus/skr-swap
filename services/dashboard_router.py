@@ -289,19 +289,6 @@ async def dashboard_home():
                 background: #333;
                 color: #00d4aa;
             }
-            .token-label {
-                display: flex;
-                flex-direction: column;
-                gap: 2px;
-            }
-            .token-symbol {
-                font-weight: 600;
-                color: #e5e5e5;
-            }
-            .token-name {
-                font-size: 11px;
-                color: #9a9a9a;
-            }
             .success, .completed { color: #00d4aa; }
             .error, .failed { color: #ff4444; }
             .pending { color: #ffaa00; }
@@ -736,12 +723,7 @@ async def dashboard_home():
                                 const priceDecimals = isSol ? 2 : 4;
                                 return `
                                 <tr>
-                                    <td>
-                                        <div class="token-label">
-                                            <div class="token-symbol">${b.token}</div>
-                                            ${b.name ? `<div class="token-name">${b.name}</div>` : ''}
-                                        </div>
-                                    </td>
+                                    <td>${b.token}</td>
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
@@ -1062,9 +1044,10 @@ async def get_balances(
                         mint = info.get("mint")
                         token_amount = info.get("tokenAmount") or {}
                         ui_amount = token_amount.get("uiAmount")
-                        if ui_amount is None:
+                        ui_amount_str = token_amount.get("uiAmountString")
+                        if ui_amount is None or (ui_amount == 0 and ui_amount_str not in (None, "", "0", "0.0")):
                             try:
-                                ui_amount = float(token_amount.get("uiAmountString") or 0)
+                                ui_amount = float(ui_amount_str or 0)
                             except Exception:
                                 ui_amount = 0
                         if not mint or not ui_amount or ui_amount <= 0:
