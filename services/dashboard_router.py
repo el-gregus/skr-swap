@@ -714,6 +714,7 @@ async def dashboard_home():
                                 <th>Balance</th>
                                 <th>Price (USD)</th>
                                 <th>Value (USD)</th>
+                                <th>Change</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -727,6 +728,9 @@ async def dashboard_home():
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
+                                    <td class="${(b.change_pct ?? 0) > 0 ? 'change-up' : (b.change_pct ?? 0) < 0 ? 'change-down' : 'change-flat'}">
+                                        ${b.change_pct == null ? '-' : `${(b.change_pct > 0 ? '+' : '')}${b.change_pct.toFixed(2)}%`}
+                                    </td>
                                 </tr>
                                 `;
                             }).join("")}
@@ -1095,6 +1099,23 @@ async def get_balances(
     except Exception as e:
         logger.error("Failed to get token prices: {}", str(e))
     
+    # Initialize baseline tracking for balance changes
+    baselines = getattr(request.app.state, "balance_baselines", None)
+    if baselines is None:
+        baselines = {}
+        request.app.state.balance_baselines = baselines
+    account_baseline = baselines.setdefault(account_id, {})
+
+    for balance in balances:
+        mint = balance["mint"]
+        if mint not in account_baseline:
+            account_baseline[mint] = balance["balance"]
+        base_value = account_baseline.get(mint, 0)
+        if base_value and base_value != 0:
+            balance["change_pct"] = ((balance["balance"] - base_value) / base_value) * 100
+        else:
+            balance["change_pct"] = None
+
     # Add USD values
     total_usd = 0
     for balance in balances:
