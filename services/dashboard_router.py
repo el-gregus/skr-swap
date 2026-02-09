@@ -200,6 +200,31 @@ async def dashboard_home():
                 color: #aaa;
                 font-size: 12px;
             }
+            .asset-tabs {
+                display: flex;
+                gap: 10px;
+                margin: 10px 0 14px;
+                flex-wrap: wrap;
+            }
+            .asset-tab {
+                background: #242424;
+                border: 1px solid #3a3a3a;
+                color: #d6d6d6;
+                padding: 6px 12px;
+                border-radius: 999px;
+                font-size: 12px;
+                cursor: pointer;
+                transition: all 0.15s ease;
+            }
+            .asset-tab.active {
+                background: #0f2b22;
+                border-color: #00d4aa;
+                color: #00d4aa;
+                box-shadow: 0 0 0 1px rgba(0, 212, 170, 0.2);
+            }
+            .asset-tab:hover {
+                border-color: #00d4aa;
+            }
             .signal-pill {
                 display: inline-flex;
                 align-items: center;
@@ -272,26 +297,26 @@ async def dashboard_home():
                 <div class="price-charts">
                     <div class="price-card" id="price-card-sol">
                         <div class="price-header">
-                            <div class="price-title">SOL (24h)</div>
+                            <div class="price-title" id="price-title-0">Token (24h)</div>
                         </div>
                         <div class="price-body">
                             <div class="price-meta">
-                                <div class="price-value" id="price-value-sol">$--</div>
-                                <div class="price-change" id="price-change-sol">--</div>
+                                <div class="price-value" id="price-value-0">$--</div>
+                                <div class="price-change" id="price-change-0">--</div>
                             </div>
-                            <div class="price-chart" id="price-chart-sol"></div>
+                            <div class="price-chart" id="price-chart-0"></div>
                         </div>
                     </div>
                     <div class="price-card" id="price-card-skr">
                         <div class="price-header">
-                            <div class="price-title">SKR (24h)</div>
+                            <div class="price-title" id="price-title-1">Token (24h)</div>
                         </div>
                         <div class="price-body">
                             <div class="price-meta">
-                                <div class="price-value" id="price-value-skr">$--</div>
-                                <div class="price-change" id="price-change-skr">--</div>
+                                <div class="price-value" id="price-value-1">$--</div>
+                                <div class="price-change" id="price-change-1">--</div>
                             </div>
-                            <div class="price-chart" id="price-chart-skr"></div>
+                            <div class="price-chart" id="price-chart-1"></div>
                         </div>
                     </div>
                 </div>
@@ -300,6 +325,7 @@ async def dashboard_home():
                     <div class="clock-utc" id="clock-utc">UTC: --:--:--</div>
                 </div>
             </div>
+            <div class="asset-tabs" id="asset-tabs"></div>
             <div class="section">
                 <div class="section-header">
                     <h2>💰 Wallet Balances</h2>
@@ -342,6 +368,10 @@ async def dashboard_home():
         </div>
 
         <script>
+            let assets = [];
+            let currentAsset = null;
+            let currentTokens = ["SOL", "SKR"];
+
             // Format dates in Newfoundland Time (12-hour format)
             function formatNLTime(dateString) {
                 // Handle legacy timestamps without timezone info by treating them as UTC
@@ -442,23 +472,31 @@ async def dashboard_home():
                 `;
             }
 
-            function updatePriceCard(symbol, data) {
+            function updatePriceCard(index, symbol, data) {
                 const prices = data.prices || [];
                 const current = data.current_price ?? null;
                 const changePct = data.change_pct ?? null;
-                const priceDecimals = symbol === "SOL" ? 2 : 4;
+                const upper = (symbol || "").toUpperCase();
+                const priceDecimals = upper === "SOL" || upper === "USDC" ? 2 : 4;
 
-                const valueEl = document.getElementById(`price-value-${symbol.toLowerCase()}`);
-                const changeEl = document.getElementById(`price-change-${symbol.toLowerCase()}`);
-                const chartEl = document.getElementById(`price-chart-${symbol.toLowerCase()}`);
+                const valueEl = document.getElementById(`price-value-${index}`);
+                const changeEl = document.getElementById(`price-change-${index}`);
+                const chartEl = document.getElementById(`price-chart-${index}`);
+                const titleEl = document.getElementById(`price-title-${index}`);
 
                 if (current === null) {
                     valueEl.textContent = "$--";
                     changeEl.textContent = "--";
                     chartEl.innerHTML = renderSparkline(prices);
+                    if (titleEl) {
+                        titleEl.textContent = symbol ? `${symbol} (24h)` : "Token (24h)";
+                    }
                     return;
                 }
 
+                if (titleEl) {
+                    titleEl.textContent = symbol ? `${symbol} (24h)` : "Token (24h)";
+                }
                 valueEl.textContent = `$${current.toFixed(priceDecimals)}`;
                 if (changePct === null) {
                     changeEl.textContent = "--";
@@ -473,18 +511,78 @@ async def dashboard_home():
             }
 
             async function loadPriceCharts() {
-                const response = await fetch('/api/price-history?symbols=SOL,SKR');
+                const symbols = currentTokens || [];
+                if (!symbols.length) {
+                    for (let i = 0; i < 2; i += 1) {
+                        updatePriceCard(i, "", {});
+                    }
+                    return;
+                }
+                const response = await fetch(`/api/price-history?symbols=${symbols.join(",")}`);
                 const data = await response.json();
                 if (data && data.data) {
-                    updatePriceCard("SOL", data.data.SOL || {});
-                    updatePriceCard("SKR", data.data.SKR || {});
+                    for (let i = 0; i < 2; i += 1) {
+                        const symbol = symbols[i];
+                        if (!symbol) {
+                            updatePriceCard(i, "", {});
+                            continue;
+                        }
+                        updatePriceCard(i, symbol, data.data[symbol] || {});
+                    }
                 }
+            }
+
+            function setActiveAsset(assetId) {
+                currentAsset = assets.find(asset => asset.id === assetId) || assets[0] || null;
+                if (!currentAsset) {
+                    return;
+                }
+                currentTokens = currentAsset.price_symbols || [];
+                if (!currentTokens.length && currentAsset.token_pair) {
+                    currentTokens = currentAsset.token_pair.split("-").filter(Boolean);
+                }
+                const tabsEl = document.getElementById('asset-tabs');
+                if (tabsEl) {
+                    Array.from(tabsEl.querySelectorAll('.asset-tab')).forEach(tab => {
+                        tab.classList.toggle('active', tab.dataset.assetId === currentAsset.id);
+                    });
+                }
+                loadSwaps();
+                loadSignals();
+                loadBalances();
+                loadPriceCharts();
+            }
+
+            async function loadAssets() {
+                const tabsEl = document.getElementById('asset-tabs');
+                if (!tabsEl) return;
+                const response = await fetch('/api/assets');
+                const data = await response.json();
+                assets = data.assets || [];
+                if (!assets.length) {
+                    assets = [{
+                        id: "wallet-1",
+                        label: "Default",
+                        token_pair: "SOL-SKR",
+                        price_symbols: ["SOL", "SKR"]
+                    }];
+                }
+                tabsEl.innerHTML = assets.map(asset => `
+                    <button class="asset-tab" data-asset-id="${asset.id}">
+                        ${asset.label || asset.token_pair || asset.id}
+                    </button>
+                `).join('');
+                Array.from(tabsEl.querySelectorAll('.asset-tab')).forEach(tab => {
+                    tab.addEventListener('click', () => setActiveAsset(tab.dataset.assetId));
+                });
+                setActiveAsset(assets[0].id);
             }
 
             async function loadSwaps() {
                 const limitEl = document.getElementById('swaps-limit');
                 const limit = limitEl ? limitEl.value : 10;
-                const response = await fetch(`/api/swaps?limit=${limit}`);
+                const accountId = currentAsset ? currentAsset.id : null;
+                const response = await fetch(`/api/swaps?limit=${limit}${accountId ? `&account_id=${accountId}` : ''}`);
                 const data = await response.json();
 
                 const html = `
@@ -564,7 +662,8 @@ async def dashboard_home():
             async function loadBalances() {
                 const balancesEl = document.getElementById("balances");
                 try {
-                    const response = await fetch("/api/balances/wallet-1");
+                    const accountId = currentAsset ? currentAsset.id : "wallet-1";
+                    const response = await fetch(`/api/balances/${accountId}`);
                     if (!response.ok) {
                         if (lastBalancesHtml) {
                             balancesEl.innerHTML = lastBalancesHtml;
@@ -620,7 +719,8 @@ async def dashboard_home():
             }
 
             async function loadSignals() {
-                const response = await fetch('/api/signals?limit=10');
+                const accountId = currentAsset ? currentAsset.id : null;
+                const response = await fetch(`/api/signals?limit=10${accountId ? `&account_id=${accountId}` : ''}`);
                 const data = await response.json();
                 const sortEl = document.getElementById('signals-sort');
                 const sortBy = sortEl ? sortEl.value : 'time';
@@ -674,13 +774,13 @@ async def dashboard_home():
             }
 
             // Load data
-            loadSwaps();
-            loadSignals();
-            loadBalances();
-            loadPriceCharts();
+            loadAssets();
 
             // Refresh every 5 seconds
             setInterval(() => {
+                if (!currentAsset) {
+                    return;
+                }
                 loadSwaps();
                 loadSignals();
                 loadBalances();
@@ -799,6 +899,42 @@ async def get_signals(
         signal["timeframe"] = payload.get("timeframe")
 
     return {"signals": signals}
+
+
+@router.get("/api/assets")
+async def get_assets(request: Request) -> Dict[str, Any]:
+    """Get configured assets for dashboard tabs."""
+    manager = _get_account_manager(request)
+    assets = []
+
+    for account in manager.accounts.values():
+        strategy = account.strategy or {}
+        token_pair = strategy.get("token_pair", "")
+        base_token = strategy.get("base_token")
+        quote_token = strategy.get("quote_token")
+        price_symbols = []
+
+        if token_pair and "-" in token_pair:
+            for sym in token_pair.split("-"):
+                if sym and sym not in price_symbols:
+                    price_symbols.append(sym)
+        else:
+            for sym in (quote_token, base_token):
+                if sym and sym not in price_symbols:
+                    price_symbols.append(sym)
+
+        label = token_pair or (f"{quote_token}-{base_token}" if quote_token and base_token else account.label)
+
+        assets.append({
+            "id": account.id,
+            "label": label,
+            "token_pair": token_pair,
+            "base_token": base_token,
+            "quote_token": quote_token,
+            "price_symbols": price_symbols,
+        })
+
+    return {"assets": assets}
 
 
 @router.get("/api/balances/{account_id}")

@@ -29,7 +29,20 @@ async def _price_poller(app: FastAPI) -> None:
         return
 
     tokens = config.get("tokens", {})
-    symbols = ["SOL", "SKR"]
+    symbols = []
+    accounts = config.get("accounts", [])
+    for account in accounts:
+        strategy = account.get("strategy", {})
+        token_pair = strategy.get("token_pair", "")
+        if token_pair and "-" in token_pair:
+            for sym in token_pair.split("-"):
+                if sym and sym in tokens and sym not in symbols:
+                    symbols.append(sym)
+        for sym in (strategy.get("quote_token"), strategy.get("base_token")):
+            if sym and sym in tokens and sym not in symbols:
+                symbols.append(sym)
+    if not symbols:
+        symbols = ["SOL", "SKR"]
     symbol_mints = {symbol: tokens.get(symbol) for symbol in symbols}
     poll_interval = config.get("dashboard", {}).get("price_poll_interval", 60)
 
