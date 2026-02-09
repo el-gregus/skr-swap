@@ -714,6 +714,7 @@ async def dashboard_home():
                                 <th>Balance</th>
                                 <th>Price (USD)</th>
                                 <th>Value (USD)</th>
+                                <th>Δ USD</th>
                                 <th>Δ Qty</th>
                                 <th>Change</th>
                             </tr>
@@ -729,6 +730,9 @@ async def dashboard_home():
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
+                                    <td class="${(b.change_usd ?? 0) > 0 ? 'change-up' : (b.change_usd ?? 0) < 0 ? 'change-down' : 'change-flat'}">
+                                        ${b.change_usd == null ? '-' : `${(b.change_usd > 0 ? '+' : '')}$${Math.abs(Number(b.change_usd)).toFixed(2)}`}
+                                    </td>
                                     <td class="${(b.change_amount ?? 0) > 0 ? 'change-up' : (b.change_amount ?? 0) < 0 ? 'change-down' : 'change-flat'}">
                                         ${b.change_amount == null ? '-' : `${(b.change_amount > 0 ? '+' : '')}${Number(b.change_amount).toFixed(6)}`}
                                     </td>
@@ -1103,25 +1107,6 @@ async def get_balances(
     except Exception as e:
         logger.error("Failed to get token prices: {}", str(e))
     
-    # Initialize baseline tracking for balance changes
-    baselines = getattr(request.app.state, "balance_baselines", None)
-    if baselines is None:
-        baselines = {}
-        request.app.state.balance_baselines = baselines
-    account_baseline = baselines.setdefault(account_id, {})
-
-    for balance in balances:
-        mint = balance["mint"]
-        if mint not in account_baseline:
-            account_baseline[mint] = balance["balance"]
-        base_value = account_baseline.get(mint, 0)
-        change_amount = balance["balance"] - base_value
-        balance["change_amount"] = change_amount
-        if base_value and base_value != 0:
-            balance["change_pct"] = (change_amount / base_value) * 100
-        else:
-            balance["change_pct"] = None
-
     # Add USD values
     total_usd = 0
     for balance in balances:
@@ -1131,6 +1116,42 @@ async def get_balances(
         balance["price_usd"] = price
         balance["value_usd"] = usd_value
         total_usd += usd_value
+
+    # Initialize baseline tracking for balance and USD changes
+    baselines = getattr(request.app.state, "balance_baselines", None)
+    if baselines is None:
+        baselines = {}
+        request.app.state.balance_baselines = baselines
+    account_baseline = baselines.setdefault(account_id, {})
+
+    for balance in balances:
+        mint = balance["mint"]
+        baseline_entry = account_baseline.get(mint)
+        if baseline_entry is None:
+            baseline_entry = {
+                "balance": balance["balance"],
+                "usd": balance["value_usd"],
+            }
+            account_baseline[mint] = baseline_entry
+        elif not isinstance(baseline_entry, dict):
+            # Backward compatibility for old in-memory baseline format (float balance).
+            baseline_entry = {
+                "balance": float(baseline_entry),
+                "usd": float(baseline_entry) * balance["price_usd"],
+            }
+            account_baseline[mint] = baseline_entry
+
+        base_balance = baseline_entry.get("balance", 0)
+        base_usd = baseline_entry.get("usd", 0)
+
+        change_amount = balance["balance"] - base_balance
+        balance["change_amount"] = change_amount
+        balance["change_usd"] = balance["value_usd"] - base_usd
+
+        if base_balance and base_balance != 0:
+            balance["change_pct"] = (change_amount / base_balance) * 100
+        else:
+            balance["change_pct"] = None
     
     return {
         "account_id": account_id,
