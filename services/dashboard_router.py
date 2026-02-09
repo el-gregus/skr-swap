@@ -2,7 +2,7 @@
 import json
 import httpx
 from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse
@@ -26,6 +26,32 @@ def _get_account_manager(request: Request):
     if not manager:
         raise HTTPException(status_code=500, detail="Account manager not initialized")
     return manager
+
+
+async def _get_token_metadata(request: Request) -> Dict[str, Dict[str, Any]]:
+    """Fetch and cache token metadata (symbol/name) keyed by mint."""
+    cached = getattr(request.app.state, "token_metadata", None)
+    cached_at = getattr(request.app.state, "token_metadata_ts", None)
+    if cached and cached_at:
+        if datetime.now(timezone.utc) - cached_at < timedelta(hours=6):
+            return cached
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get("https://token.jup.ag/strict")
+            resp.raise_for_status()
+            data = resp.json()
+            metadata = {
+                token.get("address"): token
+                for token in data
+                if token.get("address")
+            }
+            request.app.state.token_metadata = metadata
+            request.app.state.token_metadata_ts = datetime.now(timezone.utc)
+            return metadata
+    except Exception as e:
+        logger.warning("Failed to fetch token metadata: {}", e)
+        return cached or {}
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -262,6 +288,19 @@ async def dashboard_home():
             th {
                 background: #333;
                 color: #00d4aa;
+            }
+            .token-label {
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+            .token-symbol {
+                font-weight: 600;
+                color: #e5e5e5;
+            }
+            .token-name {
+                font-size: 11px;
+                color: #9a9a9a;
             }
             .success, .completed { color: #00d4aa; }
             .error, .failed { color: #ff4444; }
@@ -697,7 +736,12 @@ async def dashboard_home():
                                 const priceDecimals = isSol ? 2 : 4;
                                 return `
                                 <tr>
-                                    <td>${b.token}</td>
+                                    <td>
+                                        <div class="token-label">
+                                            <div class="token-symbol">${b.token}</div>
+                                            ${b.name ? `<div class="token-name">${b.name}</div>` : ''}
+                                        </div>
+                                    </td>
                                     <td>${b.balance.toFixed(6)}</td>
                                     <td>$${(b.price_usd || 0).toFixed(priceDecimals)}</td>
                                     <td>$${(b.value_usd || 0).toFixed(4)}</td>
@@ -963,6 +1007,7 @@ async def get_balances(
     
     balances = []
     symbol_by_mint = {mint: symbol for symbol, mint in tokens.items() if mint}
+    token_metadata = await _get_token_metadata(request)
 
     # Get SOL balance
     from solders.pubkey import Pubkey
@@ -979,6 +1024,7 @@ async def get_balances(
         if sol_balance > 0:
             balances.append({
                 "token": "SOL",
+                "name": "Solana",
                 "balance": sol_balance,
                 "mint": tokens.get("SOL", "So11111111111111111111111111111111111111112"),
             })
@@ -1032,9 +1078,12 @@ async def get_balances(
     for mint, balance in mint_balances.items():
         if balance <= 0:
             continue
-        symbol = symbol_by_mint.get(mint, f"{mint[:4]}...{mint[-4:]}")
+        meta = token_metadata.get(mint, {})
+        symbol = meta.get("symbol") or symbol_by_mint.get(mint) or f"{mint[:4]}...{mint[-4:]}"
+        name = meta.get("name")
         balances.append({
             "token": symbol,
+            "name": name,
             "balance": balance,
             "mint": mint,
         })
