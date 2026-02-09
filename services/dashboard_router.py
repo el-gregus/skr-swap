@@ -1,7 +1,7 @@
 """Dashboard API endpoints for SOL Swap."""
 import json
 import httpx
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Request, HTTPException, Depends
@@ -47,30 +47,94 @@ def _get_account_manager(request: Request):
     return manager
 
 
-async def _get_token_metadata(request: Request) -> Dict[str, Dict[str, Any]]:
+async def _get_token_metadata(
+    request: Request,
+    mints: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """Fetch and cache token metadata (symbol/name) keyed by mint."""
-    cached = getattr(request.app.state, "token_metadata", None)
-    cached_at = getattr(request.app.state, "token_metadata_ts", None)
-    if cached and cached_at:
-        if datetime.now(timezone.utc) - cached_at < timedelta(hours=6):
-            return cached
+    cache = getattr(request.app.state, "token_metadata", None) or {}
+    if not isinstance(cache, dict):
+        cache = {}
+    request.app.state.token_metadata = cache
+
+    target_mints = [str(m) for m in (mints or []) if m]
+    if not target_mints:
+        return cache
+
+    now = datetime.now(timezone.utc)
+    ttl = timedelta(hours=6)
+    fail_cooldown = timedelta(minutes=5)
+
+    def _is_stale(entry: Dict[str, Any]) -> bool:
+        if not isinstance(entry, dict):
+            return True
+        cached_at_raw = entry.get("_cached_at")
+        if not cached_at_raw:
+            return False
+        try:
+            cached_at = datetime.fromisoformat(str(cached_at_raw))
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            return now - cached_at.astimezone(timezone.utc) >= ttl
+        except Exception:
+            return True
+
+    missing = [mint for mint in target_mints if mint not in cache or _is_stale(cache[mint])]
+    if not missing:
+        return cache
+
+    fail_ts = getattr(request.app.state, "token_metadata_fail_ts", None)
+    if isinstance(fail_ts, datetime):
+        if now - fail_ts < fail_cooldown:
+            return cache
+
+    jupiter = getattr(request.app.state, "jupiter", None)
+    api_key = getattr(jupiter, "api_key", None) if jupiter else None
+    if not api_key:
+        return cache
+
+    endpoint = "https://api.jup.ag/tokens/v2/search"
+    headers = {"x-api-key": str(api_key)}
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get("https://token.jup.ag/all")
-            resp.raise_for_status()
-            data = resp.json()
-            metadata = {
-                token.get("address"): token
-                for token in data
-                if token.get("address")
-            }
-            request.app.state.token_metadata = metadata
-            request.app.state.token_metadata_ts = datetime.now(timezone.utc)
-            return metadata
+            for i in range(0, len(missing), 50):
+                chunk = missing[i:i + 50]
+                resp = await client.get(
+                    endpoint,
+                    params={"query": ",".join(chunk)},
+                    headers=headers,
+                )
+                resp.raise_for_status()
+                payload = resp.json()
+
+                if isinstance(payload, list):
+                    items = payload
+                elif isinstance(payload, dict):
+                    items = payload.get("tokens") or payload.get("data") or payload.get("results") or []
+                else:
+                    items = []
+
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    mint = item.get("id") or item.get("address") or item.get("mint")
+                    if not mint:
+                        continue
+                    cache[str(mint)] = {
+                        "symbol": item.get("symbol"),
+                        "name": item.get("name"),
+                        "_cached_at": now.isoformat(),
+                    }
+
+        request.app.state.token_metadata_fail_ts = None
+        request.app.state.token_metadata = cache
+        return cache
     except Exception as e:
-        logger.warning("Failed to fetch token metadata: {}", e)
-        return cached or {}
+        if not isinstance(fail_ts, datetime) or now - fail_ts >= fail_cooldown:
+            logger.warning("Failed to fetch token metadata: {}", e)
+        request.app.state.token_metadata_fail_ts = now
+        return cache
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -1089,7 +1153,6 @@ async def get_balances(
         "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups": "URANUS",
         "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn": "PUMP",
     }
-    token_metadata = await _get_token_metadata(request)
 
     # Get SOL balance
     from solders.pubkey import Pubkey
@@ -1160,6 +1223,8 @@ async def get_balances(
             logger.error("Failed to list token balances: {}", e)
     else:
         logger.warning("Solana RPC URL not configured; skipping token balances")
+
+    token_metadata = await _get_token_metadata(request, list(mint_balances.keys()))
 
     for mint, balance in mint_balances.items():
         if balance <= 0:
