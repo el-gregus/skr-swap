@@ -961,83 +961,73 @@ async def get_balances(
         raise HTTPException(status_code=500, detail="Clients not initialized")
     
     balances = []
-    
+    symbol_by_mint = {mint: symbol for symbol, mint in tokens.items() if mint}
+
     # Get SOL balance
     from solders.pubkey import Pubkey
+    from solana.rpc.types import TokenAccountOpts
+    from spl.token.constants import TOKEN_PROGRAM_ID
+    try:
+        from spl.token_2022.constants import TOKEN_2022_PROGRAM_ID
+    except Exception:
+        TOKEN_2022_PROGRAM_ID = None
+
     wallet_pubkey = account.keypair.pubkey()
-    
     try:
         sol_balance_resp = await solana.get_balance(wallet_pubkey)
         sol_balance = sol_balance_resp / 1e9 if sol_balance_resp else 0
-        
-        balances.append({
-            "token": "SOL",
-            "balance": sol_balance,
-            "mint": tokens.get("SOL", "So11111111111111111111111111111111111111112"),
-        })
+        if sol_balance > 0:
+            balances.append({
+                "token": "SOL",
+                "balance": sol_balance,
+                "mint": tokens.get("SOL", "So11111111111111111111111111111111111111112"),
+            })
     except Exception as e:
         logger.error("Failed to get SOL balance: {}", e)
-    
-    # Get SKR balance
-    if "SKR" in tokens:
+
+    # Get all SPL token balances (non-zero)
+    mint_balances: Dict[str, float] = {}
+    program_ids = [TOKEN_PROGRAM_ID]
+    if TOKEN_2022_PROGRAM_ID:
+        program_ids.append(TOKEN_2022_PROGRAM_ID)
+
+    for program_id in program_ids:
         try:
-            skr_balance_raw = await solana.get_token_balance(
-                Pubkey.from_string(str(wallet_pubkey)),
-                Pubkey.from_string(tokens["SKR"])
+            resp = await solana.client.get_token_accounts_by_owner(
+                wallet_pubkey,
+                TokenAccountOpts(program_id=program_id, encoding="jsonParsed"),
             )
-            # Handle None (error) vs 0 (no balance)
-            if skr_balance_raw is not None:
-                decimals = await solana.get_token_decimals(
-                    Pubkey.from_string(tokens["SKR"])
-                )
-                decimals = decimals if decimals is not None else 6
-                skr_balance = skr_balance_raw / (10 ** decimals)
-            else:
-                skr_balance = 0
-
-            balances.append({
-                "token": "SKR",
-                "balance": skr_balance,
-                "mint": tokens["SKR"],
-            })
+            for item in resp.value or []:
+                data = item.account.data
+                parsed = getattr(data, "parsed", None)
+                if parsed is None and isinstance(data, dict):
+                    parsed = data.get("parsed")
+                if not parsed or not isinstance(parsed, dict):
+                    continue
+                info = parsed.get("info") or {}
+                mint = info.get("mint")
+                token_amount = info.get("tokenAmount") or {}
+                ui_amount = token_amount.get("uiAmount")
+                if ui_amount is None:
+                    try:
+                        ui_amount = float(token_amount.get("uiAmountString") or 0)
+                    except Exception:
+                        ui_amount = 0
+                if not mint or not ui_amount or ui_amount <= 0:
+                    continue
+                mint_balances[mint] = mint_balances.get(mint, 0) + float(ui_amount)
         except Exception as e:
-            logger.error("Failed to get SKR balance: {}", str(e))
-            # Add entry with 0 balance on error to prevent missing from dashboard
-            balances.append({
-                "token": "SKR",
-                "balance": 0,
-                "mint": tokens["SKR"],
-            })
+            logger.error("Failed to list token balances: {}", e)
 
-    # Get USD prices from Jupiter (API key configured)
-    # Get USDC balance
-    if "USDC" in tokens:
-        try:
-            usdc_balance_raw = await solana.get_token_balance(
-                Pubkey.from_string(str(wallet_pubkey)),
-                Pubkey.from_string(tokens["USDC"])
-            )
-            if usdc_balance_raw is not None:
-                decimals = await solana.get_token_decimals(
-                    Pubkey.from_string(tokens["USDC"])
-                )
-                decimals = decimals if decimals is not None else 6
-                usdc_balance = usdc_balance_raw / (10 ** decimals)
-            else:
-                usdc_balance = 0
-
-            balances.append({
-                "token": "USDC",
-                "balance": usdc_balance,
-                "mint": tokens["USDC"],
-            })
-        except Exception as e:
-            logger.error("Failed to get USDC balance: {}", str(e))
-            balances.append({
-                "token": "USDC",
-                "balance": 0,
-                "mint": tokens["USDC"],
-            })
+    for mint, balance in mint_balances.items():
+        if balance <= 0:
+            continue
+        symbol = symbol_by_mint.get(mint, f"{mint[:4]}...{mint[-4:]}")
+        balances.append({
+            "token": symbol,
+            "balance": balance,
+            "mint": mint,
+        })
 
     # Get USD prices from Jupiter (API key configured)
     token_mints = [b["mint"] for b in balances]
