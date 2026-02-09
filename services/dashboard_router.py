@@ -1,4 +1,4 @@
-"""Dashboard API endpoints for SKR Swap."""
+"""Dashboard API endpoints for SOL Swap."""
 import json
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
@@ -34,7 +34,7 @@ async def dashboard_home():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>SKR Swap Dashboard</title>
+        <title>SOL Swap Dashboard</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -249,7 +249,13 @@ async def dashboard_home():
         <div class="container">
             <div class="header-container">
                 <div class="brand">
-                    <svg class="logo" viewBox="0 0 48 48" aria-label="SKR Swap logo" role="img">
+                    <svg class="logo" viewBox="0 0 48 48" aria-label="SOL Swap logo" role="img">
+                        <defs>
+                            <linearGradient id="sol-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#14F195"/>
+                                <stop offset="100%" stop-color="#9945FF"/>
+                            </linearGradient>
+                        </defs>
                         <circle class="logo-ring" cx="24" cy="24" r="21"/>
                         <path class="logo-swap" d="M14 20h12a6 6 0 0 1 6 6v4"/>
                         <path class="logo-swap" d="M34 28H22a6 6 0 0 1-6-6v-4"/>
@@ -257,10 +263,11 @@ async def dashboard_home():
                         <polyline class="logo-swap" points="18,16 14,20 18,24"/>
                         <circle class="logo-dot" cx="14" cy="20" r="2.4"/>
                         <circle class="logo-dot" cx="34" cy="28" r="2.4"/>
-                        <circle class="logo-sol" cx="24" cy="24" r="7.5"/>
-                        <text class="logo-sol-text" x="24" y="27.5" text-anchor="middle">SOL</text>
+                        <rect x="17" y="18" width="14" height="4" rx="2" fill="url(#sol-gradient)"/>
+                        <rect x="17" y="24" width="14" height="4" rx="2" fill="url(#sol-gradient)"/>
+                        <rect x="17" y="30" width="14" height="4" rx="2" fill="url(#sol-gradient)"/>
                     </svg>
-                    <h1>SKR Swap</h1>
+                    <h1>SOL Swap</h1>
                 </div>
                 <div class="price-charts">
                     <div class="price-card" id="price-card-sol">
