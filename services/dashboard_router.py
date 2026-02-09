@@ -992,6 +992,7 @@ async def get_balances(
     symbol_overrides = {
         "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
         "BFgdzMkTPdKKJeTipv2njtDEwhKxkgFueJQfJGt1jups": "URANUS",
+        "pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn": "PUMP",
     }
     token_metadata = await _get_token_metadata(request)
 
